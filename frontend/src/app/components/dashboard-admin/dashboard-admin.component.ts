@@ -1,12 +1,13 @@
 import { Component, signal, OnInit, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { BookingService } from '../../services/booking.service';
 import { SocketService } from '../../services/socket.service';
 import { Booking, BookingStatus } from '../../models/booking.model';
 
 interface Resource {
-  id: string;
+  _id: string;
   name: string;
   description: string;
   capacity: number;
@@ -40,23 +41,14 @@ interface Resource {
         </div>
       </header>
 
-      <!-- Tabs -->
       <div class="tab-bar mb-6">
-        <button class="tab-btn" [class.active]="activeTab() === 'bookings'" (click)="activeTab.set('bookings')">
-          Reservations
-        </button>
-        <button class="tab-btn" [class.active]="activeTab() === 'resources'" (click)="activeTab.set('resources')">
-          Manage Resources
-        </button>
+        <button class="tab-btn" [class.active]="activeTab() === 'bookings'" (click)="activeTab.set('bookings')">Reservations</button>
+        <button class="tab-btn" [class.active]="activeTab() === 'resources'" (click)="activeTab.set('resources')">Manage Resources</button>
       </div>
 
-      <!-- ── TAB: RESERVATIONS ── -->
       @if (activeTab() === 'bookings') {
         @if (isLoading()) {
-          <div class="loading-full">
-            <div class="spinner"></div>
-            <p>Loading reservations...</p>
-          </div>
+          <div class="loading-full"><div class="spinner"></div><p>Loading reservations...</p></div>
         } @else {
           <div class="admin-controls mb-6 flex justify-between items-center">
             <div class="filters flex gap-4">
@@ -66,39 +58,18 @@ interface Resource {
             </div>
             <button (click)="loadAll()" class="btn btn-outline btn-sm">Refresh</button>
           </div>
-
           <div class="table-container glass card">
             <table class="admin-table">
               <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Resource</th>
-                  <th>Duration</th>
-                  <th>Status</th>
-                  <th class="text-right">Actions</th>
-                </tr>
+                <tr><th>User</th><th>Resource</th><th>Duration</th><th>Status</th><th class="text-right">Actions</th></tr>
               </thead>
               <tbody>
                 @for (booking of filteredBookings(); track booking._id) {
                   <tr [class.row-new]="isRecentlyUpdated(booking._id)">
-                    <td>
-                      <div class="user-info">
-                        <span class="user-name">{{ booking.userName }}</span>
-                        <span class="user-id">{{ booking.userId }}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="res-name">{{ booking.resourceName }}</span>
-                    </td>
-                    <td>
-                      <div class="time-info">
-                        <div class="time-range">{{ booking.startTime | date:'MMM d, HH:mm' }} - {{ booking.endTime | date:'HH:mm' }}</div>
-                        <div class="text-muted text-xs">{{ getDuration(booking.startTime, booking.endTime) }} mins</div>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="status-pill" [attr.data-status]="booking.status">{{ booking.status }}</span>
-                    </td>
+                    <td><div class="user-info"><span class="user-name">{{ booking.userName }}</span><span class="user-id">{{ booking.userId }}</span></div></td>
+                    <td><span class="res-name">{{ booking.resourceName }}</span></td>
+                    <td><div class="time-info"><div>{{ booking.startTime | date:'MMM d, HH:mm' }} - {{ booking.endTime | date:'HH:mm' }}</div><div class="text-muted text-xs">{{ getDuration(booking.startTime, booking.endTime) }} mins</div></div></td>
+                    <td><span class="status-pill" [attr.data-status]="booking.status">{{ booking.status }}</span></td>
                     <td class="text-right">
                       <div class="action-group">
                         @if (booking.status === 'pending') {
@@ -111,9 +82,7 @@ interface Resource {
                     </td>
                   </tr>
                 } @empty {
-                  <tr>
-                    <td colspan="5" class="text-center py-12 text-muted">No reservations found.</td>
-                  </tr>
+                  <tr><td colspan="5" class="text-center py-12 text-muted">No reservations found.</td></tr>
                 }
               </tbody>
             </table>
@@ -121,13 +90,13 @@ interface Resource {
         }
       }
 
-      <!-- ── TAB: RESOURCES ── -->
       @if (activeTab() === 'resources') {
         <div class="resources-layout">
-
-          <!-- Formulaire création/édition -->
           <section class="resource-form-section glass card">
             <h3 class="section-title">{{ editingResource() ? 'Edit Resource' : 'Add New Resource' }}</h3>
+
+            @if (saveError()) { <div class="alert alert-error">{{ saveError() }}</div> }
+            @if (saveSuccess()) { <div class="alert alert-success">Resource saved!</div> }
 
             <div class="form-group">
               <label>Resource Name</label>
@@ -148,107 +117,92 @@ interface Resource {
                 <span class="toggle-track"></span>
               </label>
             </div>
-
             <div class="form-actions">
               @if (editingResource()) {
                 <button class="btn btn-outline btn-sm" (click)="cancelEdit()">Cancel</button>
               }
-              <button class="btn btn-primary btn-block" (click)="saveResource()" [disabled]="!resForm.name">
-                {{ editingResource() ? 'Save Changes' : 'Add Resource' }}
+              <button class="btn btn-primary btn-block" (click)="saveResource()" [disabled]="!resForm.name || isSaving()">
+                {{ isSaving() ? 'Saving...' : (editingResource() ? 'Save Changes' : 'Add Resource') }}
               </button>
             </div>
           </section>
 
-          <!-- Liste des ressources -->
           <section class="resources-list">
-            <h3 class="section-title mb-4">Current Resources</h3>
-            @for (res of resources(); track res.id) {
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="section-title" style="margin-bottom:0">Current Resources</h3>
+              <button (click)="loadResources()" class="btn btn-outline btn-sm">Refresh</button>
+            </div>
+            @if (isLoadingResources()) {
+              <div class="loading-full"><div class="spinner"></div></div>
+            }
+            @for (res of resources(); track res._id) {
               <div class="resource-card glass card" [class.unavailable]="!res.available">
                 <div class="resource-card-header">
                   <div>
                     <h4 class="res-title">{{ res.name }}</h4>
                     <p class="res-desc text-muted text-sm">{{ res.description }}</p>
                   </div>
-                  <span class="avail-badge" [class.on]="res.available">
-                    {{ res.available ? 'Available' : 'Unavailable' }}
-                  </span>
+                  <span class="avail-badge" [class.on]="res.available">{{ res.available ? 'Available' : 'Unavailable' }}</span>
                 </div>
-                <div class="resource-meta">
-                  <span class="meta-item">👥 {{ res.capacity }} persons</span>
-                </div>
+                <div class="resource-meta"><span class="meta-item">👥 {{ res.capacity }} persons</span></div>
                 <div class="resource-actions">
                   <button class="btn btn-outline btn-sm" (click)="editResource(res)">Edit</button>
-                  <button class="btn btn-sm btn-danger-outline" (click)="deleteResource(res.id)">Delete</button>
+                  <button class="btn btn-sm btn-danger-outline" (click)="deleteResource(res._id)">Delete</button>
                 </div>
               </div>
             } @empty {
-              <div class="empty-state glass card">
-                <p class="text-muted">No resources yet. Add your first resource.</p>
-              </div>
+              @if (!isLoadingResources()) {
+                <div class="empty-state glass card"><p class="text-muted">No resources yet. Add your first resource.</p></div>
+              }
             }
           </section>
         </div>
       }
-
     </div>
   `,
   styles: [`
     .page-title { margin: 0; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
     .dashboard-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
-
     .stats-grid { display: flex; gap: 16px; flex-wrap: wrap; }
-
     .stat-card { padding: 12px 24px; display: flex; flex-direction: column; min-width: 120px; border-radius: 16px; }
     .stat-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
     .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
     .text-primary { color: var(--primary) !important; }
     .text-warning { color: var(--warning) !important; }
-
     .tab-bar { display: flex; background: rgba(0,0,0,0.05); border-radius: 12px; padding: 4px; width: fit-content; }
     .tab-btn { padding: 8px 24px; border: none; background: transparent; border-radius: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
     .tab-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-
     .chip { padding: 6px 16px; border-radius: 20px; background: rgba(0,0,0,0.05); border: 1px solid transparent; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .chip:hover { background: rgba(0,0,0,0.08); }
     .chip.active { background: var(--primary); color: white; }
-
     .table-container { overflow-x: auto; border-radius: 20px; padding: 8px; }
     .admin-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
     .admin-table th { padding: 16px; text-align: left; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .admin-table td { padding: 16px; background: rgba(255,255,255,0.3); border-top: 1px solid rgba(255,255,255,0.5); border-bottom: 1px solid rgba(255,255,255,0.5); }
     .admin-table tr td:first-child { border-left: 1px solid rgba(255,255,255,0.5); border-radius: 12px 0 0 12px; }
     .admin-table tr td:last-child { border-right: 1px solid rgba(255,255,255,0.5); border-radius: 0 12px 12px 0; }
-
     .user-info, .time-info { display: flex; flex-direction: column; }
     .user-name { font-weight: 700; }
     .user-id { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
-
     .status-pill { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; }
     .status-pill[data-status="confirmed"] { color: var(--success); background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
     .status-pill[data-status="pending"] { color: var(--warning); background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); }
     .status-pill[data-status="cancelled"] { color: var(--danger); background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
-
     .action-group { display: flex; gap: 8px; justify-content: flex-end; }
     .btn-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; transition: all 0.2s; }
     .btn-success-light { color: var(--success); background: rgba(16,185,129,0.1); }
     .btn-success-light:hover { background: var(--success); color: white; }
     .btn-danger-light { color: var(--danger); background: rgba(239,68,68,0.1); }
     .btn-danger-light:hover { background: var(--danger); color: white; }
-
     .row-new { animation: pulseBg 2s ease-out; }
     @keyframes pulseBg { 0% { background: rgba(99,102,241,0.1); } 100% { background: transparent; } }
-
-    .loading-full { text-align: center; padding: 100px 0; }
-    .loading-full .spinner { margin-bottom: 20px; }
-
-    /* Resources tab */
+    .loading-full { text-align: center; padding: 60px 0; }
+    .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,0,0,0.1); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 16px; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .resources-layout { display: grid; grid-template-columns: 340px 1fr; gap: 32px; align-items: start; }
     @media (max-width: 900px) { .resources-layout { grid-template-columns: 1fr; } }
-
     .resource-form-section { padding: 28px; border-radius: 20px; }
     .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
-
     .toggle-group { display: flex; justify-content: space-between; align-items: center; }
     .toggle-group label:first-child { margin-bottom: 0; }
     .toggle { position: relative; display: inline-block; width: 42px; height: 24px; }
@@ -257,62 +211,54 @@ interface Resource {
     .toggle-track::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
     .toggle input:checked + .toggle-track { background: var(--primary); }
     .toggle input:checked + .toggle-track::before { transform: translateX(18px); }
-
     .form-actions { display: flex; gap: 8px; margin-top: 8px; }
-
     .resource-card { padding: 20px; border-radius: 16px; margin-bottom: 12px; }
     .resource-card.unavailable { opacity: 0.6; }
     .resource-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
     .res-title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
-    .res-desc { font-size: 0.85rem; }
-
     .avail-badge { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; white-space: nowrap; color: var(--danger); background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
     .avail-badge.on { color: var(--success); background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.2); }
-
     .resource-meta { margin-bottom: 14px; }
     .meta-item { font-size: 0.85rem; color: var(--text-muted); }
-
     .resource-actions { display: flex; gap: 8px; }
     .btn-danger-outline { background: transparent; border: 1px solid rgba(239,68,68,0.3); color: var(--danger); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.8125rem; padding: 6px 12px; transition: all 0.2s; }
     .btn-danger-outline:hover { background: var(--danger); color: white; }
-
     .empty-state { padding: 40px; text-align: center; border-radius: 16px; }
     .mb-4 { margin-bottom: 16px; }
     .py-12 { padding: 48px 0; }
+    .alert { padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 500; margin-bottom: 16px; }
+    .alert-error { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+    .alert-success { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2); }
   `]
 })
 export class DashboardAdminComponent implements OnInit {
   protected readonly BookingStatus = BookingStatus;
   bookingService = inject(BookingService);
   socketService = inject(SocketService);
+  http = inject(HttpClient);
+
+  private readonly API = 'http://localhost:3000/api/resources';
 
   activeTab = signal<'bookings' | 'resources'>('bookings');
-
   allBookings = signal<Booking[]>([]);
   filter = signal<'all' | 'pending' | 'confirmed'>('all');
   isLoading = signal(true);
+  isLoadingResources = signal(false);
+  isSaving = signal(false);
   recentUpdates = signal<Set<string>>(new Set());
   filteredBookings = signal<Booking[]>([]);
-
-  // Ressources stockées localement (localStorage pour la démo)
-  resources = signal<Resource[]>(this.loadResources());
-
+  resources = signal<Resource[]>([]);
   editingResource = signal<Resource | null>(null);
+  saveError = signal<string | null>(null);
+  saveSuccess = signal(false);
 
-  resForm: Omit<Resource, 'id'> = {
-    name: '',
-    description: '',
-    capacity: 10,
-    available: true,
-  };
+  resForm = { name: '', description: '', capacity: 10, available: true };
 
   constructor() {
     effect(() => {
       const bookings = this.allBookings();
-      const currentFilter = this.filter();
-      this.filteredBookings.set(
-        currentFilter === 'all' ? bookings : bookings.filter(b => b.status === currentFilter)
-      );
+      const f = this.filter();
+      this.filteredBookings.set(f === 'all' ? bookings : bookings.filter(b => b.status === f));
     }, { allowSignalWrites: true });
 
     effect(() => {
@@ -323,6 +269,7 @@ export class DashboardAdminComponent implements OnInit {
 
   ngOnInit() {
     this.loadAll();
+    this.loadResources();
     this.socketService.connect();
   }
 
@@ -334,44 +281,43 @@ export class DashboardAdminComponent implements OnInit {
     });
   }
 
-  updateStatus(booking: Booking, status: BookingStatus) {
-    this.bookingService.updateStatus(booking._id, { status }).subscribe({
-      next: () => {
-        this.allBookings.update(list => list.map(b => b._id === booking._id ? { ...b, status } : b));
-      }
+  // ✅ Lit depuis MongoDB
+  loadResources() {
+    this.isLoadingResources.set(true);
+    this.http.get<Resource[]>(this.API).subscribe({
+      next: (data) => { this.resources.set(data); this.isLoadingResources.set(false); },
+      error: () => this.isLoadingResources.set(false)
     });
   }
 
-  filterByStatus(status: 'all' | 'pending' | 'confirmed') { this.filter.set(status); }
-
-  getCountByStatus(status: string) {
-    return this.allBookings().filter(b => b.status === status).length;
-  }
-
-  getDuration(start: string, end: string) {
-    return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000);
-  }
-
-  isRecentlyUpdated(id: string) { return this.recentUpdates().has(id); }
-
-  // ── Resource management ──────────────────────────────
-
+  // ✅ Écrit dans MongoDB
   saveResource() {
+    this.isSaving.set(true);
+    this.saveError.set(null);
+    this.saveSuccess.set(false);
     const editing = this.editingResource();
-    if (editing) {
-      this.resources.update(list =>
-        list.map(r => r.id === editing.id ? { ...this.resForm, id: editing.id } : r)
-      );
-      this.editingResource.set(null);
-    } else {
-      const newRes: Resource = {
-        ...this.resForm,
-        id: 'res-' + Date.now(),
-      };
-      this.resources.update(list => [...list, newRes]);
-    }
-    this.persistResources();
-    this.resetResForm();
+    const req = editing
+      ? this.http.patch<Resource>(`${this.API}/${editing._id}`, this.resForm)
+      : this.http.post<Resource>(this.API, this.resForm);
+
+    req.subscribe({
+      next: (saved) => {
+        if (editing) {
+          this.resources.update(list => list.map(r => r._id === editing._id ? saved : r));
+        } else {
+          this.resources.update(list => [saved, ...list]);
+        }
+        this.saveSuccess.set(true);
+        this.isSaving.set(false);
+        this.editingResource.set(null);
+        this.resetResForm();
+        setTimeout(() => this.saveSuccess.set(false), 3000);
+      },
+      error: (err) => {
+        this.saveError.set(err.error?.message || 'Failed to save resource.');
+        this.isSaving.set(false);
+      }
+    });
   }
 
   editResource(res: Resource) {
@@ -379,46 +325,35 @@ export class DashboardAdminComponent implements OnInit {
     this.resForm = { name: res.name, description: res.description, capacity: res.capacity, available: res.available };
   }
 
-  cancelEdit() {
-    this.editingResource.set(null);
-    this.resetResForm();
-  }
+  cancelEdit() { this.editingResource.set(null); this.resetResForm(); }
 
+  // ✅ Supprime dans MongoDB
   deleteResource(id: string) {
     if (confirm('Delete this resource?')) {
-      this.resources.update(list => list.filter(r => r.id !== id));
-      this.persistResources();
+      this.http.delete(`${this.API}/${id}`).subscribe({
+        next: () => this.resources.update(list => list.filter(r => r._id !== id)),
+        error: () => alert('Failed to delete resource.')
+      });
     }
   }
 
-  private resetResForm() {
-    this.resForm = { name: '', description: '', capacity: 10, available: true };
+  updateStatus(booking: Booking, status: BookingStatus) {
+    this.bookingService.updateStatus(booking._id, { status }).subscribe({
+      next: () => this.allBookings.update(list => list.map(b => b._id === booking._id ? { ...b, status } : b))
+    });
   }
 
-  private loadResources(): Resource[] {
-    try {
-      const stored = localStorage.getItem('admin_resources');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    // Ressources par défaut
-    return [
-      { id: 'res-001', name: 'Conference Room A', description: 'Main meeting room with projector', capacity: 20, available: true },
-      { id: 'res-002', name: 'Main Stage Area', description: 'Large event space', capacity: 200, available: true },
-      { id: 'res-003', name: 'Workshop Suite', description: 'Hands-on workshop room', capacity: 30, available: true },
-    ];
-  }
+  filterByStatus(s: 'all' | 'pending' | 'confirmed') { this.filter.set(s); }
+  getCountByStatus(s: string) { return this.allBookings().filter(b => b.status === s).length; }
+  getDuration(start: string, end: string) { return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000); }
+  isRecentlyUpdated(id: string) { return this.recentUpdates().has(id); }
 
-  private persistResources() {
-    localStorage.setItem('admin_resources', JSON.stringify(this.resources()));
-  }
+  private resetResForm() { this.resForm = { name: '', description: '', capacity: 10, available: true }; }
 
   private handleRealtimeUpdate(payload: any) {
     const { event, booking } = payload;
-    this.recentUpdates.update(set => { const s = new Set(set); s.add(booking._id); return s; });
-    setTimeout(() => {
-      this.recentUpdates.update(set => { const s = new Set(set); s.delete(booking._id); return s; });
-    }, 5000);
-
+    this.recentUpdates.update(s => { const n = new Set(s); n.add(booking._id); return n; });
+    setTimeout(() => { this.recentUpdates.update(s => { const n = new Set(s); n.delete(booking._id); return n; }); }, 5000);
     if (event === 'booking:created') {
       this.allBookings.update(list => [booking, ...list]);
     } else {

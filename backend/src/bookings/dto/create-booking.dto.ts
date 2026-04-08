@@ -1,14 +1,14 @@
-// dto/create-booking.dto.ts
 import { IsString, IsDateString, IsOptional, IsNotEmpty } from 'class-validator';
 
 export class CreateBookingDto {
+  // ✅ Injectés automatiquement par le controller depuis le JWT — pas envoyés par le frontend
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  userId: string;
+  userId?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  userName: string;
+  userName?: string;
 
   @IsString()
   @IsNotEmpty()
