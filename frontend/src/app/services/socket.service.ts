@@ -2,16 +2,17 @@ import { Injectable, signal } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { AuthService } from './auth.service';
 import { Booking } from '../models/booking.model';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class SocketService {
   private socket: Socket | null = null;
-  // ✅ Racine "/" — correspond au gateway backend sans namespace
-  private readonly SOCKET_URL = 'http://localhost:3000';
+  // ✅ URL du socket — racine sans /api
+  private readonly SOCKET_URL = environment.apiUrl;
 
   latestBookingUpdate = signal<{ event: string; booking: Booking } | null>(null);
   adminUpdate = signal<any>(null);
-  resourceUpdate = signal<{ event: string; resource: any } | null>(null); // ✅ nouveau
+  resourceUpdate = signal<{ event: string; resource: any } | null>(null);
 
   constructor(private authService: AuthService) {}
 
@@ -44,7 +45,6 @@ export class SocketService {
       this.adminUpdate.set(payload);
     });
 
-    // ✅ Écoute les mises à jour de ressources en temps réel
     this.socket.on('resource:update', (payload) => {
       this.resourceUpdate.set(payload);
     });

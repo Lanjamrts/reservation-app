@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { BookingService } from '../../services/booking.service';
 import { SocketService } from '../../services/socket.service';
 import { Booking, BookingStatus } from '../../models/booking.model';
+import { environment } from '../../../environments/environment';
 
 interface Resource {
   _id: string;
@@ -94,10 +95,8 @@ interface Resource {
         <div class="resources-layout">
           <section class="resource-form-section glass card">
             <h3 class="section-title">{{ editingResource() ? 'Edit Resource' : 'Add New Resource' }}</h3>
-
             @if (saveError()) { <div class="alert alert-error">{{ saveError() }}</div> }
             @if (saveSuccess()) { <div class="alert alert-success">Resource saved!</div> }
-
             <div class="form-group">
               <label>Resource Name</label>
               <input type="text" [(ngModel)]="resForm.name" placeholder="e.g. Conference Room B" class="form-control" />
@@ -237,7 +236,8 @@ export class DashboardAdminComponent implements OnInit {
   socketService = inject(SocketService);
   http = inject(HttpClient);
 
-  private readonly API = 'http://localhost:3000/api/resources';
+  // ✅ URL correcte pour les ressources
+  private readonly API = `${environment.apiUrl}/api/resources`;
 
   activeTab = signal<'bookings' | 'resources'>('bookings');
   allBookings = signal<Booking[]>([]);
@@ -281,7 +281,6 @@ export class DashboardAdminComponent implements OnInit {
     });
   }
 
-  // ✅ Lit depuis MongoDB
   loadResources() {
     this.isLoadingResources.set(true);
     this.http.get<Resource[]>(this.API).subscribe({
@@ -290,7 +289,6 @@ export class DashboardAdminComponent implements OnInit {
     });
   }
 
-  // ✅ Écrit dans MongoDB
   saveResource() {
     this.isSaving.set(true);
     this.saveError.set(null);
@@ -327,7 +325,6 @@ export class DashboardAdminComponent implements OnInit {
 
   cancelEdit() { this.editingResource.set(null); this.resetResForm(); }
 
-  // ✅ Supprime dans MongoDB
   deleteResource(id: string) {
     if (confirm('Delete this resource?')) {
       this.http.delete(`${this.API}/${id}`).subscribe({
