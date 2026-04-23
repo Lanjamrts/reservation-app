@@ -91,7 +91,7 @@ interface ResourceWithBookings extends Resource {
             <!-- Resource preview card -->
             <div class="modal-resource-card">
               <div class="modal-resource-thumb">
-                @if (res.photos?.length) {
+                @if (res.photos.length) {
                   <img [src]="res.photos[0]" [alt]="res.name" (error)="onImgError($event)" />
                 } @else {
                   <div class="modal-thumb-placeholder">
@@ -293,10 +293,8 @@ interface ResourceWithBookings extends Resource {
               </div>
             }
           </div>
-        }
-
-        <!-- Empty state -->
-        @else if (resourcesWithBookings().length === 0) {
+        } @else if (resourcesWithBookings().length === 0) {
+          <!-- Empty state -->
           <div class="empty-state">
             <div class="empty-state-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
@@ -304,17 +302,15 @@ interface ResourceWithBookings extends Resource {
             <div class="empty-state-title">Aucune salle disponible</div>
             <p class="empty-state-desc">Revenez bientôt, de nouvelles salles seront ajoutées par l'administrateur.</p>
           </div>
-        }
-
-        <!-- Rooms grid -->
-        @else {
+        } @else {
+          <!-- Rooms grid -->
           <div class="rooms-grid">
             @for (res of resourcesWithBookings(); track res._id; let i = $index) {
               <article class="room-card animate-in" [style.animation-delay]="(i * 0.08) + 's'">
 
                 <!-- Photo -->
                 <div class="room-photo-wrap">
-                  @if (res.photos?.length) {
+                  @if (res.photos.length) {
                     <img [src]="res.photos[0]" [alt]="res.name" class="room-photo"
                       (error)="onImgError($event)" loading="lazy" />
                   } @else {
