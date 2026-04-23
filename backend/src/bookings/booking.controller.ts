@@ -66,6 +66,18 @@ export class BookingController {
     return this.bookingService.getAvailableSlots(resourceId, date);
   }
 
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async getStats() {
+    return this.bookingService.getStats();
+  }
+
+  @Get('resource/:resourceId')
+  async findByResource(@Param('resourceId') resourceId: string) {
+    return this.bookingService.findByResource(resourceId);
+  }
+
   /**
    * GET /bookings/:id
    */

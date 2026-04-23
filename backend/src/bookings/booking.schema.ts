@@ -9,9 +9,16 @@ export enum BookingStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum PaymentStatus {
+  UNPAID = 'unpaid',
+  PENDING = 'pending',
+  PAID = 'paid',
+  REFUNDED = 'refunded',
+}
+
 @Schema({
   timestamps: true,
-  versionKey: 'version', // Optimistic locking via __v renamed to 'version'
+  versionKey: 'version',
   optimisticConcurrency: true,
 })
 export class Booking {
@@ -45,6 +52,23 @@ export class Booking {
 
   @Prop()
   notes?: string;
+
+  // Payment fields
+  @Prop({
+    type: String,
+    enum: PaymentStatus,
+    default: PaymentStatus.UNPAID,
+  })
+  paymentStatus: PaymentStatus;
+
+  @Prop({ default: 0 })
+  paymentAmount: number;
+
+  @Prop({ default: 0 })
+  depositAmount: number;
+
+  @Prop({ default: '' })
+  invoiceNumber: string;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

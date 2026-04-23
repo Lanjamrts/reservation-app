@@ -1,5 +1,7 @@
-import { Component, signal, OnInit, inject, effect } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  Component, signal, OnInit, inject, effect, computed, ChangeDetectionStrategy
+} from '@angular/core';
+import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { BookingService } from '../../services/booking.service';
@@ -13,254 +15,390 @@ interface Resource {
   description: string;
   capacity: number;
   available: boolean;
+  photos: string[];
+  amenities: string[];
+  rules: string;
+  location: string;
+  pricePerHour: number;
+  status: 'available' | 'reserved' | 'maintenance';
 }
 
 @Component({
   selector: 'app-dashboard-admin',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  changeDetection: ChangeDetectionStrategy.Default,
   template: `
-    <div class="container py-8">
-      <header class="dashboard-header mb-8">
-        <div>
-          <h1 class="h2 page-title">Admin Dashboard</h1>
-          <p class="text-secondary">Manage reservations and resources</p>
+    <!-- Toast Container -->
+    <div class="toast-container" aria-live="polite">
+      @for (toast of toasts(); track toast.id) {
+        <div class="toast" [class]="'toast-' + toast.type" [class.out]="toast.leaving">
+          <span class="toast-icon">{{ toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : 'ℹ️' }}</span>
+          {{ toast.message }}
         </div>
-        <div class="stats-grid">
-          <div class="stat-card glass card">
-            <span class="stat-label">Total Bookings</span>
-            <span class="stat-value">{{ allBookings().length }}</span>
-          </div>
-          <div class="stat-card glass card">
-            <span class="stat-label">Pending</span>
-            <span class="stat-value text-warning">{{ getCountByStatus('pending') }}</span>
-          </div>
-          <div class="stat-card glass card">
-            <span class="stat-label">Resources</span>
-            <span class="stat-value text-primary">{{ resources().length }}</span>
+      }
+    </div>
+
+    <!-- Main Content -->
+    <div class="admin-page">
+      <header class="admin-header">
+        <div>
+          <h1 class="h2 page-title text-gradient">Dashboard Administrateur</h1>
+          <p class="text-secondary">Supervision complète de Reserva</p>
+        </div>
+        <div class="header-actions">
+           <div class="ws-indicator" [class.connected]="wsConnected()">
+            <span class="ws-dot"></span>
+            {{ wsConnected() ? 'Direct' : 'Hors ligne' }}
           </div>
         </div>
       </header>
 
-      <div class="tab-bar mb-6">
-        <button class="tab-btn" [class.active]="activeTab() === 'bookings'" (click)="activeTab.set('bookings')">Reservations</button>
-        <button class="tab-btn" [class.active]="activeTab() === 'resources'" (click)="activeTab.set('resources')">Manage Resources</button>
+      <!-- Navigation Tabs -->
+      <div class="admin-nav mb-6">
+        <button class="nav-tab" [class.active]="activeTab() === 'overview'" (click)="activeTab.set('overview')">
+          📊 Vue d'ensemble
+        </button>
+        <button class="nav-tab" [class.active]="activeTab() === 'resources'" (click)="activeTab.set('resources')">
+          🏢 Salles & Lieux
+        </button>
+        <button class="nav-tab" [class.active]="activeTab() === 'bookings'" (click)="activeTab.set('bookings')">
+          📅 Réservations & Paiements
+        </button>
       </div>
 
-      @if (activeTab() === 'bookings') {
-        @if (isLoading()) {
-          <div class="loading-full"><div class="spinner"></div><p>Loading reservations...</p></div>
-        } @else {
-          <div class="admin-controls mb-6 flex justify-between items-center">
-            <div class="filters flex gap-4">
-              <button (click)="filterByStatus('all')" class="chip" [class.active]="filter() === 'all'">All</button>
-              <button (click)="filterByStatus('pending')" class="chip" [class.active]="filter() === 'pending'">Pending</button>
-              <button (click)="filterByStatus('confirmed')" class="chip" [class.active]="filter() === 'confirmed'">Confirmed</button>
-            </div>
-            <button (click)="loadAll()" class="btn btn-outline btn-sm">Refresh</button>
+      <!-- TAB 1: OVERVIEW -->
+      @if (activeTab() === 'overview') {
+        <div class="overview-grid animate-in">
+          <!-- Stats KPIs -->
+          <div class="kpi-card card">
+             <span class="kpi-icon flex items-center justify-center bg-blue-100 text-blue-600">📅</span>
+             <div class="kpi-info">
+               <span class="kpi-label">Réservations totales</span>
+               <span class="kpi-val">{{ generalStats()?.total ?? '-' }}</span>
+             </div>
           </div>
-          <div class="table-container glass card">
-            <table class="admin-table">
-              <thead>
-                <tr><th>User</th><th>Resource</th><th>Duration</th><th>Status</th><th class="text-right">Actions</th></tr>
-              </thead>
-              <tbody>
-                @for (booking of filteredBookings(); track booking._id) {
-                  <tr [class.row-new]="isRecentlyUpdated(booking._id)">
-                    <td><div class="user-info"><span class="user-name">{{ booking.userName }}</span><span class="user-id">{{ booking.userId }}</span></div></td>
-                    <td><span class="res-name">{{ booking.resourceName }}</span></td>
-                    <td><div class="time-info"><div>{{ booking.startTime | date:'MMM d, HH:mm' }} - {{ booking.endTime | date:'HH:mm' }}</div><div class="text-muted text-xs">{{ getDuration(booking.startTime, booking.endTime) }} mins</div></div></td>
-                    <td><span class="status-pill" [attr.data-status]="booking.status">{{ booking.status }}</span></td>
-                    <td class="text-right">
-                      <div class="action-group">
-                        @if (booking.status === 'pending') {
-                          <button (click)="updateStatus(booking, BookingStatus.CONFIRMED)" class="btn-icon btn-success-light" title="Confirm">✓</button>
-                        }
-                        @if (booking.status !== 'cancelled') {
-                          <button (click)="updateStatus(booking, BookingStatus.CANCELLED)" class="btn-icon btn-danger-light" title="Cancel">✕</button>
-                        }
+          <div class="kpi-card card">
+             <span class="kpi-icon flex items-center justify-center bg-green-100 text-green-600">💸</span>
+             <div class="kpi-info">
+               <span class="kpi-label">Revenus Confirmés</span>
+               <span class="kpi-val">{{ paymentStats()?.totalRevenue | number }} Ar</span>
+             </div>
+          </div>
+          <div class="kpi-card card">
+             <span class="kpi-icon flex items-center justify-center bg-purple-100 text-purple-600">📈</span>
+             <div class="kpi-info">
+               <span class="kpi-label">Taux d'occupation</span>
+               <span class="kpi-val">{{ generalStats()?.occupancyRate ?? '-' }}%</span>
+             </div>
+          </div>
+          <div class="kpi-card card">
+             <span class="kpi-icon flex items-center justify-center bg-amber-100 text-amber-600">🏢</span>
+             <div class="kpi-info">
+               <span class="kpi-label">Salles Actives</span>
+               <span class="kpi-val">{{ resourceStats()?.available ?? '-' }}/{{ resourceStats()?.total ?? '-' }}</span>
+             </div>
+          </div>
+
+          <!-- Charts Area -->
+          <div class="charts-area mt-4">
+             <div class="chart-box card">
+               <h3 class="chart-title">Revenus des 6 derniers mois</h3>
+               <div class="css-bar-chart">
+                 @for (stat of paymentStats()?.monthlyRevenue; track stat.month) {
+                    <div class="bar-col">
+                      <div class="bar-fill" [style.height]="getBarHeight(stat.amount)">
+                        <span class="bar-tooltip">{{ stat.amount | number }} Ar</span>
                       </div>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr><td colspan="5" class="text-center py-12 text-muted">No reservations found.</td></tr>
-                }
-              </tbody>
-            </table>
+                      <span class="bar-label">{{ stat.month | slice:5:7 }}/{{ stat.month | slice:2:4 }}</span>
+                    </div>
+                 }
+               </div>
+             </div>
+
+             <div class="chart-box card">
+               <h3 class="chart-title">Statut des Salles</h3>
+               <div class="css-pie-chart" [style]="getPieStyles()">
+                 <div class="pie-hole"></div>
+               </div>
+               <div class="pie-legend mt-4">
+                 <div class="legend-item"><span class="ldot available"></span> Libre ({{ resourceStats()?.available ?? 0 }})</div>
+                 <div class="legend-item"><span class="ldot reserved"></span> Occupée ({{ resourceStats()?.reserved ?? 0 }})</div>
+                 <div class="legend-item"><span class="ldot maint"></span> Maint. ({{ resourceStats()?.maintenance ?? 0 }})</div>
+               </div>
+             </div>
           </div>
-        }
+        </div>
       }
 
+      <!-- TAB 2: RESOURCES -->
       @if (activeTab() === 'resources') {
-        <div class="resources-layout">
-          <section class="resource-form-section glass card">
-            <h3 class="section-title">{{ editingResource() ? 'Edit Resource' : 'Add New Resource' }}</h3>
-            @if (saveError()) { <div class="alert alert-error">{{ saveError() }}</div> }
-            @if (saveSuccess()) { <div class="alert alert-success">Resource saved!</div> }
+        <div class="resources-layout animate-in">
+          <!-- Editor Form -->
+          <section class="resource-form-section card-elevated">
+            <h3 class="section-title">{{ editingResource() ? 'Modifier la salle' : 'Nouvelle salle' }}</h3>
+
             <div class="form-group">
-              <label>Resource Name</label>
-              <input type="text" [(ngModel)]="resForm.name" placeholder="e.g. Conference Room B" class="form-control" />
+              <label>Nom de la salle *</label>
+              <input type="text" [(ngModel)]="resForm.name" placeholder="Ex: Salle de conférence A" class="form-control" />
             </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="form-group">
+                <label>Capacité (personnes)</label>
+                <input type="number" [(ngModel)]="resForm.capacity" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label>Tarif horaire (Ar)</label>
+                <input type="number" [(ngModel)]="resForm.pricePerHour" class="form-control" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Localisation</label>
+              <input type="text" [(ngModel)]="resForm.location" placeholder="Ex: 2ème étage, Aile B" class="form-control" />
+            </div>
+
             <div class="form-group">
               <label>Description</label>
-              <textarea [(ngModel)]="resForm.description" placeholder="What is this space for?" class="form-control" rows="2"></textarea>
+              <textarea [(ngModel)]="resForm.description" class="form-control" rows="2"></textarea>
             </div>
+
             <div class="form-group">
-              <label>Capacity (persons)</label>
-              <input type="number" [(ngModel)]="resForm.capacity" min="1" class="form-control" />
-            </div>
-            <div class="form-group toggle-group">
-              <label>Available for booking</label>
-              <label class="toggle">
-                <input type="checkbox" [(ngModel)]="resForm.available" />
-                <span class="toggle-track"></span>
-              </label>
-            </div>
-            <div class="form-actions">
-              @if (editingResource()) {
-                <button class="btn btn-outline btn-sm" (click)="cancelEdit()">Cancel</button>
+              <label>URL Photo (séparées par une virgule)</label>
+              <input type="text" [ngModel]="resForm.photos.join(', ')" (ngModelChange)="updatePhotos($event)" placeholder="https://..., https://..." class="form-control" />
+              @if (resForm.photos.length) {
+                <div class="photo-preview mt-2">
+                  @for (p of resForm.photos; track p) { <img [src]="p" alt="preview" /> }
+                </div>
               }
-              <button class="btn btn-primary btn-block" (click)="saveResource()" [disabled]="!resForm.name || isSaving()">
-                {{ isSaving() ? 'Saving...' : (editingResource() ? 'Save Changes' : 'Add Resource') }}
+            </div>
+
+            <div class="form-group">
+              <label>Équipements</label>
+              <div class="amenities-selector">
+                @for (a of availableAmenities; track a) {
+                  <button type="button" class="btn btn-sm"
+                    [class.btn-primary-light]="resForm.amenities.includes(a)"
+                    [class.btn-outline]="!resForm.amenities.includes(a)"
+                    (click)="toggleAmenity(a)">
+                    {{ a }}
+                  </button>
+                }
+              </div>
+            </div>
+
+            <div class="form-group toggle-group mt-4">
+              <label>Statut opérationnel</label>
+              <select [(ngModel)]="resForm.status" class="form-control" style="width:140px">
+                <option value="available">Par défaut (Libre)</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            </div>
+
+            <div class="form-actions mt-6">
+              @if (editingResource()) {
+                <button class="btn btn-ghost" (click)="cancelEdit()">Annuler</button>
+              }
+              <button class="btn btn-primary flex-1" (click)="saveResource()" [disabled]="!resForm.name || isSaving()">
+                @if(isSaving()) { <span class="spinner-sm"></span> }
+                {{ editingResource() ? 'Enregistrer' : 'Créer la salle' }}
               </button>
             </div>
           </section>
 
+          <!-- List -->
           <section class="resources-list">
             <div class="flex justify-between items-center mb-4">
-              <h3 class="section-title" style="margin-bottom:0">Current Resources</h3>
-              <button (click)="loadResources()" class="btn btn-outline btn-sm">Refresh</button>
+              <h3 class="section-title mb-0">Catalogue des Salles</h3>
+              <button (click)="loadResources()" class="btn btn-outline btn-sm">↻ Actu.</button>
             </div>
+
             @if (isLoadingResources()) {
-              <div class="loading-full"><div class="spinner"></div></div>
-            }
-            @for (res of resources(); track res._id) {
-              <div class="resource-card glass card" [class.unavailable]="!res.available">
-                <div class="resource-card-header">
-                  <div>
-                    <h4 class="res-title">{{ res.name }}</h4>
-                    <p class="res-desc text-muted text-sm">{{ res.description }}</p>
+              <div class="py-12"><div class="spinner"></div></div>
+            } @else {
+              <div class="admin-room-grid">
+                @for (res of resources(); track res._id) {
+                  <div class="admin-room-card glass card" [class.is-maint]="res.status === 'maintenance'">
+                     <div class="arc-header">
+                       <h4 class="font-bold text-lg truncate">{{ res.name }}</h4>
+                       <span class="badge" [class]="'badge-' + res.status">{{ getResStatusLabel(res.status) }}</span>
+                     </div>
+                     <p class="text-sm text-muted mb-2 truncate">📍 {{ res.location || 'N/A' }} — 👥 {{ res.capacity }}</p>
+                     <p class="text-sm text-primary font-bold mb-3">{{ res.pricePerHour | number }} Ar / heure</p>
+
+                     <div class="arc-actions pt-3 border-t">
+                       <button class="btn btn-outline btn-sm" (click)="editResource(res)">Modifier</button>
+                       <button class="btn btn-danger-outline btn-sm" (click)="deleteResource(res._id)">Suppr</button>
+                     </div>
                   </div>
-                  <span class="avail-badge" [class.on]="res.available">{{ res.available ? 'Available' : 'Unavailable' }}</span>
-                </div>
-                <div class="resource-meta"><span class="meta-item">👥 {{ res.capacity }} persons</span></div>
-                <div class="resource-actions">
-                  <button class="btn btn-outline btn-sm" (click)="editResource(res)">Edit</button>
-                  <button class="btn btn-sm btn-danger-outline" (click)="deleteResource(res._id)">Delete</button>
-                </div>
+                }
               </div>
-            } @empty {
-              @if (!isLoadingResources()) {
-                <div class="empty-state glass card"><p class="text-muted">No resources yet. Add your first resource.</p></div>
-              }
             }
           </section>
+        </div>
+      }
+
+      <!-- TAB 3: BOOKINGS & PAYMENTS -->
+      @if (activeTab() === 'bookings') {
+        <div class="bookings-layout animate-in">
+           <div class="table-controls mb-4 glass card p-4 flex justify-between items-center">
+             <div class="filters flex gap-2">
+               <button class="chip" [class.active]="filterStatus() === 'all'" (click)="filterStatus.set('all')">Tous</button>
+               <button class="chip" [class.active]="filterStatus() === 'pending'" (click)="filterStatus.set('pending')">En attente</button>
+               <button class="chip" [class.active]="filterStatus() === 'confirmed'" (click)="filterStatus.set('confirmed')">Confirmés</button>
+             </div>
+             <button (click)="loadBookings()" class="btn btn-outline btn-sm">↻ Actualiser le tableau</button>
+           </div>
+
+           <div class="table-container card-elevated">
+             <table class="admin-table">
+               <thead>
+                 <tr>
+                   <th>Référence</th>
+                   <th>Client</th>
+                   <th>Salle & Créneau</th>
+                   <th>Paiement</th>
+                   <th>Statut Résa.</th>
+                   <th class="text-right">Actions</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 @for (booking of filteredBookings(); track booking._id) {
+                   <tr [class.row-highlight]="recentUpdates().has(booking._id)">
+                     <td>
+                        <span class="text-xs text-muted font-mono">{{ $any(booking).invoiceNumber || 'N/A' }}</span>
+                     </td>
+                     <td>
+                        <div class="font-bold">{{ booking.userName }}</div>
+                        <div class="text-xs text-muted">{{ booking.userId.substring(0,8) }}...</div>
+                     </td>
+                     <td>
+                        <div class="font-semibold text-primary">{{ booking.resourceName }}</div>
+                        <div class="text-sm">{{ booking.startTime | date:'dd/MM/yyyy HH:mm' }}</div>
+                     </td>
+                     <td>
+                        <div class="font-bold">{{ $any(booking).paymentAmount | number }} Ar</div>
+                        <span class="badge" [class]="'badge-' + ($any(booking).paymentStatus || 'unpaid')">
+                          {{ getPaymentLabel($any(booking).paymentStatus) }}
+                        </span>
+                     </td>
+                     <td>
+                        <span class="badge" [class]="'badge-' + booking.status">{{ getBookingStatusLabel(booking.status) }}</span>
+                     </td>
+                     <td class="text-right">
+                        @if (booking.status === 'pending') {
+                           <button class="btn btn-icon btn-success-light mr-1" title="Confirmer" (click)="updateBookingStatus(booking._id, 'confirmed')">✓</button>
+                        }
+                        @if (booking.status !== 'cancelled') {
+                           <button class="btn btn-icon btn-danger-light" title="Annuler" (click)="updateBookingStatus(booking._id, 'cancelled')">✕</button>
+                        }
+                     </td>
+                   </tr>
+                 } @empty {
+                   <tr><td colspan="6" class="text-center py-12 text-muted">Aucune réservation trouvée dans cette catégorie.</td></tr>
+                 }
+               </tbody>
+             </table>
+           </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .page-title { margin: 0; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .dashboard-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
-    .stats-grid { display: flex; gap: 16px; flex-wrap: wrap; }
-    .stat-card { padding: 12px 24px; display: flex; flex-direction: column; min-width: 120px; border-radius: 16px; }
-    .stat-label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
-    .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); }
-    .text-primary { color: var(--primary) !important; }
-    .text-warning { color: var(--warning) !important; }
-    .tab-bar { display: flex; background: rgba(0,0,0,0.05); border-radius: 12px; padding: 4px; width: fit-content; }
-    .tab-btn { padding: 8px 24px; border: none; background: transparent; border-radius: 10px; font-weight: 600; font-size: 0.9rem; cursor: pointer; color: var(--text-muted); transition: all 0.2s; }
-    .tab-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .chip { padding: 6px 16px; border-radius: 20px; background: rgba(0,0,0,0.05); border: 1px solid transparent; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-    .chip:hover { background: rgba(0,0,0,0.08); }
-    .chip.active { background: var(--primary); color: white; }
-    .table-container { overflow-x: auto; border-radius: 20px; padding: 8px; }
-    .admin-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
-    .admin-table th { padding: 16px; text-align: left; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .admin-table td { padding: 16px; background: rgba(255,255,255,0.3); border-top: 1px solid rgba(255,255,255,0.5); border-bottom: 1px solid rgba(255,255,255,0.5); }
-    .admin-table tr td:first-child { border-left: 1px solid rgba(255,255,255,0.5); border-radius: 12px 0 0 12px; }
-    .admin-table tr td:last-child { border-right: 1px solid rgba(255,255,255,0.5); border-radius: 0 12px 12px 0; }
-    .user-info, .time-info { display: flex; flex-direction: column; }
-    .user-name { font-weight: 700; }
-    .user-id { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
-    .status-pill { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; }
-    .status-pill[data-status="confirmed"] { color: var(--success); background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
-    .status-pill[data-status="pending"] { color: var(--warning); background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); }
-    .status-pill[data-status="cancelled"] { color: var(--danger); background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
-    .action-group { display: flex; gap: 8px; justify-content: flex-end; }
-    .btn-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; transition: all 0.2s; }
-    .btn-success-light { color: var(--success); background: rgba(16,185,129,0.1); }
-    .btn-success-light:hover { background: var(--success); color: white; }
-    .btn-danger-light { color: var(--danger); background: rgba(239,68,68,0.1); }
-    .btn-danger-light:hover { background: var(--danger); color: white; }
-    .row-new { animation: pulseBg 2s ease-out; }
-    @keyframes pulseBg { 0% { background: rgba(99,102,241,0.1); } 100% { background: transparent; } }
-    .loading-full { text-align: center; padding: 60px 0; }
-    .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,0,0,0.1); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 16px; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .resources-layout { display: grid; grid-template-columns: 340px 1fr; gap: 32px; align-items: start; }
-    @media (max-width: 900px) { .resources-layout { grid-template-columns: 1fr; } }
-    .resource-form-section { padding: 28px; border-radius: 20px; }
-    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
-    .toggle-group { display: flex; justify-content: space-between; align-items: center; }
-    .toggle-group label:first-child { margin-bottom: 0; }
-    .toggle { position: relative; display: inline-block; width: 42px; height: 24px; }
-    .toggle input { opacity: 0; width: 0; height: 0; }
-    .toggle-track { position: absolute; inset: 0; background: var(--border); border-radius: 24px; transition: 0.2s; cursor: pointer; }
-    .toggle-track::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
-    .toggle input:checked + .toggle-track { background: var(--primary); }
-    .toggle input:checked + .toggle-track::before { transform: translateX(18px); }
-    .form-actions { display: flex; gap: 8px; margin-top: 8px; }
-    .resource-card { padding: 20px; border-radius: 16px; margin-bottom: 12px; }
-    .resource-card.unavailable { opacity: 0.6; }
-    .resource-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
-    .res-title { font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
-    .avail-badge { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; white-space: nowrap; color: var(--danger); background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); }
-    .avail-badge.on { color: var(--success); background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.2); }
-    .resource-meta { margin-bottom: 14px; }
-    .meta-item { font-size: 0.85rem; color: var(--text-muted); }
-    .resource-actions { display: flex; gap: 8px; }
-    .btn-danger-outline { background: transparent; border: 1px solid rgba(239,68,68,0.3); color: var(--danger); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 0.8125rem; padding: 6px 12px; transition: all 0.2s; }
-    .btn-danger-outline:hover { background: var(--danger); color: white; }
-    .empty-state { padding: 40px; text-align: center; border-radius: 16px; }
-    .mb-4 { margin-bottom: 16px; }
-    .py-12 { padding: 48px 0; }
-    .alert { padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 500; margin-bottom: 16px; }
-    .alert-error { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
-    .alert-success { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2); }
+    .admin-page { padding: 0 24px 80px; max-width: 1400px; margin: 0 auto; }
+    .admin-header { display: flex; justify-content: space-between; align-items: flex-end; margin: 32px 0 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .admin-nav { display: flex; gap: 8px; background: white; padding: 6px; border-radius: 16px; width: fit-content; box-shadow: var(--shadow-sm); border: 1px solid var(--border); }
+    .nav-tab { padding: 10px 20px; border: none; background: transparent; font-weight: 600; color: var(--text-muted); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+    .nav-tab.active { background: var(--primary-light); color: var(--primary); }
+    .nav-tab:not(.active):hover { background: var(--surface-2); }
+
+    /* KPI */
+    .overview-grid { }
+    .charts-area { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px; }
+    @media (max-width: 1024px) { .charts-area { grid-template-columns: 1fr; } }
+    .kpi-card { display: flex; align-items: center; gap: 16px; padding: 20px; }
+    .kpi-icon { width: 56px; height: 56px; border-radius: 16px; font-size: 1.5rem; }
+    .kpi-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px; }
+    .kpi-val { font-size: 1.8rem; font-weight: 800; color: var(--text-primary); line-height: 1; }
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+
+    /* CHARTS */
+    .chart-box { padding: 24px; }
+    .chart-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 24px; color: var(--text-secondary); }
+    
+    .css-bar-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 200px; padding-top: 20px; }
+    .bar-col { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 10%; height: 100%; justify-content: flex-end; }
+    .bar-fill { width: 100%; background: var(--gradient-brand); border-radius: 6px 6px 0 0; position: relative; transition: height 1s var(--ease-spring); min-height: 4px; }
+    .bar-label { font-size: 0.75rem; color: var(--text-faint); font-weight: 600; }
+    .bar-tooltip { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; }
+    .bar-fill:hover .bar-tooltip { opacity: 1; }
+
+    .css-pie-chart { width: 180px; height: 180px; border-radius: 50%; background: #e2e8f0; margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center; }
+    .pie-hole { width: 120px; height: 120px; background: white; border-radius: 50%; }
+    .pie-legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 0.85rem; font-weight: 600; }
+    .ldot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+    .ldot.available { background: var(--success); }
+    .ldot.reserved { background: var(--warning); }
+    .ldot.maint { background: var(--danger); }
+
+    /* RESOURCES TAB */
+    .resources-layout { display: grid; grid-template-columns: 420px 1fr; gap: 32px; align-items: start; }
+    @media(max-width: 900px) { .resources-layout { grid-template-columns: 1fr; } }
+    .resource-form-section { padding: 28px; }
+    .amenities-selector { display: flex; flex-wrap: wrap; gap: 8px; }
+    .photo-preview { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .photo-preview img { width: 60px; height: 45px; object-fit: cover; border-radius: 6px; }
+
+    .admin-room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .admin-room-card { padding: 20px; }
+    .admin-room-card.is-maint { opacity: 0.7; border: 1px dashed var(--danger); }
+    .arc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
+
+    .bg-blue-100 { background-color: #dbeafe; } .text-blue-600 { color: #2563eb; }
+    .bg-green-100 { background-color: #dcfce7; } .text-green-600 { color: #16a34a; }
+    .bg-purple-100 { background-color: #f3e8ff; } .text-purple-600 { color: #9333ea; }
+    .bg-amber-100 { background-color: #fef3c7; } .text-amber-600 { color: #d97706; }
+    .border-t { border-top: 1px solid var(--border); }
+    .pt-3 { padding-top: 12px; }
+    .mr-1 { margin-right: 4px; }
   `]
 })
 export class DashboardAdminComponent implements OnInit {
   protected readonly BookingStatus = BookingStatus;
-  bookingService = inject(BookingService);
-  socketService = inject(SocketService);
-  http = inject(HttpClient);
+  
+  private bookingService = inject(BookingService);
+  private socketService = inject(SocketService);
+  private http = inject(HttpClient);
 
-  // ✅ URL correcte pour les ressources
-  private readonly API = `${environment.apiUrl}/api/resources`;
+  activeTab = signal<'overview'|'resources'|'bookings'>('overview');
+  
+  generalStats = signal<any>(null);
+  paymentStats = signal<any>(null);
+  resourceStats = signal<any>(null);
 
-  activeTab = signal<'bookings' | 'resources'>('bookings');
+  resources = signal<Resource[]>([]);
   allBookings = signal<Booking[]>([]);
-  filter = signal<'all' | 'pending' | 'confirmed'>('all');
-  isLoading = signal(true);
+  filterStatus = signal<'all'|'pending'|'confirmed'>('all');
+  
   isLoadingResources = signal(false);
   isSaving = signal(false);
+  editingResource = signal<Resource|null>(null);
+  
   recentUpdates = signal<Set<string>>(new Set());
-  filteredBookings = signal<Booking[]>([]);
-  resources = signal<Resource[]>([]);
-  editingResource = signal<Resource | null>(null);
-  saveError = signal<string | null>(null);
-  saveSuccess = signal(false);
+  toasts = signal<any[]>([]);
+  toastCounter = 0;
+  wsConnected = signal(false);
 
-  resForm = { name: '', description: '', capacity: 10, available: true };
+  availableAmenities = ['WiFi', 'Projecteur', 'Tableau blanc', 'Climatisation', 'Visioconférence', 'Imprimante', 'Cuisine', 'Parking'];
+  resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', photos: [] as string[], amenities: [] as string[] };
+
+  filteredBookings = computed(() => {
+    const s = this.filterStatus();
+    return s === 'all' ? this.allBookings() : this.allBookings().filter(b => b.status === s);
+  });
 
   constructor() {
-    effect(() => {
-      const bookings = this.allBookings();
-      const f = this.filter();
-      this.filteredBookings.set(f === 'all' ? bookings : bookings.filter(b => b.status === f));
-    }, { allowSignalWrites: true });
-
     effect(() => {
       const update = this.socketService.adminUpdate();
       if (update) this.handleRealtimeUpdate(update);
@@ -268,93 +406,132 @@ export class DashboardAdminComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.loadAll();
-    this.loadResources();
+    this.loadAllData();
     this.socketService.connect();
+    this.wsConnected.set(true);
   }
 
-  loadAll() {
-    this.isLoading.set(true);
-    this.bookingService.getAllBookings().subscribe({
-      next: (data) => { this.allBookings.set(data); this.isLoading.set(false); },
-      error: () => this.isLoading.set(false)
-    });
+  loadAllData() {
+    this.loadResources();
+    this.loadBookings();
+    this.loadStats();
+  }
+
+  loadStats() {
+    this.http.get(`${environment.apiUrl}/api/bookings/stats`).subscribe(d => this.generalStats.set(d));
+    this.http.get(`${environment.apiUrl}/api/payments/stats`).subscribe(d => this.paymentStats.set(d));
+    this.http.get(`${environment.apiUrl}/api/resources/stats`).subscribe(d => this.resourceStats.set(d));
   }
 
   loadResources() {
     this.isLoadingResources.set(true);
-    this.http.get<Resource[]>(this.API).subscribe({
-      next: (data) => { this.resources.set(data); this.isLoadingResources.set(false); },
-      error: () => this.isLoadingResources.set(false)
+    this.http.get<Resource[]>(`${environment.apiUrl}/api/resources`).subscribe({
+       next: d => { this.resources.set(d); this.isLoadingResources.set(false); },
+       error: () => this.isLoadingResources.set(false)
     });
+  }
+
+  loadBookings() {
+    this.bookingService.getAllBookings().subscribe(d => this.allBookings.set(d));
+  }
+
+  /* REVENUES CHART LOGIC */
+  getBarHeight(amount: number) {
+    const stats = this.paymentStats();
+    if (!stats || !stats.monthlyRevenue) return '0%';
+    const max = Math.max(...stats.monthlyRevenue.map((m: any) => m.amount));
+    if (max === 0) return '0%';
+    return `${Math.max((amount / max) * 100, 2)}%`;
+  }
+
+  getPieStyles() {
+    const s = this.resourceStats();
+    if (!s || s.total === 0) return 'background: #e2e8f0;';
+    const p1 = (s.available / s.total) * 100;
+    const p2 = p1 + ((s.reserved / s.total) * 100);
+    return `background: conic-gradient(var(--success) 0% ${p1}%, var(--warning) ${p1}% ${p2}%, var(--danger) ${p2}% 100%);`;
+  }
+
+  /* FORMS & ACTIONS */
+  toggleAmenity(a: string) {
+    const arr = this.resForm.amenities;
+    if (arr.includes(a)) this.resForm.amenities = arr.filter(x => x !== a);
+    else this.resForm.amenities.push(a);
+  }
+
+  updatePhotos(val: string) {
+    this.resForm.photos = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
   }
 
   saveResource() {
     this.isSaving.set(true);
-    this.saveError.set(null);
-    this.saveSuccess.set(false);
-    const editing = this.editingResource();
-    const req = editing
-      ? this.http.patch<Resource>(`${this.API}/${editing._id}`, this.resForm)
-      : this.http.post<Resource>(this.API, this.resForm);
-
+    const ed = this.editingResource();
+    const req = ed ? this.http.patch(`${environment.apiUrl}/api/resources/${ed._id}`, this.resForm)
+                 : this.http.post(`${environment.apiUrl}/api/resources`, this.resForm);
+                 
     req.subscribe({
-      next: (saved) => {
-        if (editing) {
-          this.resources.update(list => list.map(r => r._id === editing._id ? saved : r));
-        } else {
-          this.resources.update(list => [saved, ...list]);
-        }
-        this.saveSuccess.set(true);
-        this.isSaving.set(false);
-        this.editingResource.set(null);
-        this.resetResForm();
-        setTimeout(() => this.saveSuccess.set(false), 3000);
-      },
-      error: (err) => {
-        this.saveError.set(err.error?.message || 'Failed to save resource.');
-        this.isSaving.set(false);
-      }
+       next: () => {
+         this.isSaving.set(false);
+         this.showToast(ed ? 'Salle modifiée' : 'Salle créée', 'success');
+         this.cancelEdit();
+         this.loadResources();
+         this.loadStats();
+       },
+       error: () => { this.isSaving.set(false); this.showToast('Erreur serveur', 'error'); }
     });
   }
 
-  editResource(res: Resource) {
-    this.editingResource.set(res);
-    this.resForm = { name: res.name, description: res.description, capacity: res.capacity, available: res.available };
+  editResource(r: Resource) {
+    this.editingResource.set(r);
+    this.resForm = {
+      name: r.name, description: r.description, capacity: r.capacity, available: r.available,
+      status: r.status || 'available', pricePerHour: r.pricePerHour || 0,
+      location: r.location || '', photos: [...(r.photos || [])], amenities: [...(r.amenities || [])]
+    };
   }
 
-  cancelEdit() { this.editingResource.set(null); this.resetResForm(); }
+  cancelEdit() {
+    this.editingResource.set(null);
+    this.resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', photos: [], amenities: [] };
+  }
 
   deleteResource(id: string) {
-    if (confirm('Delete this resource?')) {
-      this.http.delete(`${this.API}/${id}`).subscribe({
-        next: () => this.resources.update(list => list.filter(r => r._id !== id)),
-        error: () => alert('Failed to delete resource.')
-      });
+    if(confirm('Supprimer définitivement ?')) {
+       this.http.delete(`${environment.apiUrl}/api/resources/${id}`).subscribe({
+         next: () => { this.showToast('Salle supprimée', 'info'); this.loadResources(); this.loadStats(); }
+       });
     }
   }
 
-  updateStatus(booking: Booking, status: BookingStatus) {
-    this.bookingService.updateStatus(booking._id, { status }).subscribe({
-      next: () => this.allBookings.update(list => list.map(b => b._id === booking._id ? { ...b, status } : b))
-    });
+  updateBookingStatus(id: string, st: string) {
+    this.bookingService.updateStatus(id, { status: st as BookingStatus }).subscribe();
   }
 
-  filterByStatus(s: 'all' | 'pending' | 'confirmed') { this.filter.set(s); }
-  getCountByStatus(s: string) { return this.allBookings().filter(b => b.status === s).length; }
-  getDuration(start: string, end: string) { return Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000); }
-  isRecentlyUpdated(id: string) { return this.recentUpdates().has(id); }
+  handleRealtimeUpdate(payload: any) {
+     const { event, booking } = payload;
+     if (booking) {
+       this.recentUpdates.update(s => { const n = new Set(s); n.add(booking._id); return n; });
+       setTimeout(() => this.recentUpdates.update(s => { const n = new Set(s); n.delete(booking._id); return n; }), 3000);
+       
+       if (event === 'booking:created') this.allBookings.update(l => [booking, ...l]);
+       else this.allBookings.update(l => l.map(b => b._id === booking._id ? booking : b));
+       
+       this.showToast(`Réservation ${booking._id.substring(0,6)} mise à jour`, 'info');
+       this.loadStats();
+     }
+  }
 
-  private resetResForm() { this.resForm = { name: '', description: '', capacity: 10, available: true }; }
+  /* UTILS */
+  getResStatusLabel(s: string) { return { available: 'Libre', reserved: 'Occupée', maintenance: 'Maintenance' }[s] ?? s; }
+  getBookingStatusLabel(s: string) { return { pending: 'En att.', confirmed: 'Confirmé', cancelled: 'Annulé' }[s] ?? s; }
+  getPaymentLabel(s: string) { return { unpaid: 'Non payé', pending: 'En att.', paid: 'Payé', refunded: 'Remboursé' }[s] ?? s; }
 
-  private handleRealtimeUpdate(payload: any) {
-    const { event, booking } = payload;
-    this.recentUpdates.update(s => { const n = new Set(s); n.add(booking._id); return n; });
-    setTimeout(() => { this.recentUpdates.update(s => { const n = new Set(s); n.delete(booking._id); return n; }); }, 5000);
-    if (event === 'booking:created') {
-      this.allBookings.update(list => [booking, ...list]);
-    } else {
-      this.allBookings.update(list => list.map(b => b._id === booking._id ? booking : b));
-    }
+  showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const id = ++this.toastCounter;
+    this.toasts.update(t => [...t, { id, message, type, leaving: false }]);
+    setTimeout(() => {
+      this.toasts.update(t => t.map(x => x.id === id ? { ...x, leaving: true } : x));
+      setTimeout(() => this.toasts.update(t => t.filter(x => x.id !== id)), 400);
+    }, 3500);
   }
 }

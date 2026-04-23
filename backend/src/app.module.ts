@@ -5,6 +5,8 @@ import { AuthModule } from './auth/auth.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { ResourcesModule } from './resources/resources.module';
+import { PaymentsModule } from './payments/payments.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { ResourcesModule } from './resources/resources.module';
     BookingsModule,
     GatewayModule,
     ResourcesModule,
+    PaymentsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
