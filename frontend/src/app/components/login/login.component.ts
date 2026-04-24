@@ -343,14 +343,14 @@ import { environment } from '../../../environments/environment';
 
     .blob-1 {
       width: 600px; height: 600px;
-      background: radial-gradient(circle, rgba(79,70,229,0.2) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(236,72,153,0.2) 0%, transparent 65%);
       top: -150px; left: -100px;
       animation-delay: 0s;
     }
 
     .blob-2 {
       width: 500px; height: 500px;
-      background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 65%);
       bottom: -100px; right: -80px;
       animation-delay: -5s;
       animation-duration: 15s;
@@ -358,7 +358,7 @@ import { environment } from '../../../environments/environment';
 
     .blob-3 {
       width: 350px; height: 350px;
-      background: radial-gradient(circle, rgba(192,132,252,0.1) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(190,24,93,0.1) 0%, transparent 65%);
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       animation-delay: -8s;
@@ -413,7 +413,7 @@ import { environment } from '../../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 24px rgba(79,70,229,0.4);
+      box-shadow: 0 8px 24px rgba(236,72,153,0.4);
     }
 
     .brand-name {

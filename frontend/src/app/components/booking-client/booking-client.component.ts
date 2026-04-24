@@ -591,14 +591,14 @@ interface ResourceWithBookings extends Resource {
 
     .hero-orb-1 {
       width: 500px; height: 500px;
-      background: radial-gradient(circle, rgba(79,70,229,0.18) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(236,72,153,0.18) 0%, transparent 70%);
       top: -150px; right: -100px;
       animation: heroOrbFloat 12s ease-in-out infinite;
     }
 
     .hero-orb-2 {
       width: 320px; height: 320px;
-      background: radial-gradient(circle, rgba(124,58,237,0.1) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(245,158,11,0.1) 0%, transparent 70%);
       bottom: -100px; left: 20%;
       animation: heroOrbFloat 16s ease-in-out infinite reverse;
     }
@@ -1471,7 +1471,7 @@ interface ResourceWithBookings extends Resource {
     }
 
     @keyframes flashUpdate {
-      0%   { box-shadow: 0 0 0 3px rgba(129,140,248,0.5); }
+      0%   { box-shadow: 0 0 0 3px rgba(236,72,153,0.5); }
       100% { box-shadow: none; }
     }
 

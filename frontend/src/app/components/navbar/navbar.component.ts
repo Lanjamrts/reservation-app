@@ -213,7 +213,7 @@ import { AuthService } from '../../services/auth.service';
       height: 2px;
       background: var(--gradient-brand);
       transition: width 0.1s linear;
-      box-shadow: 0 0 8px rgba(129,140,248,0.6);
+      box-shadow: 0 0 8px rgba(236,72,153,0.6);
       border-radius: 0 2px 2px 0;
     }
 
@@ -251,7 +251,7 @@ import { AuthService } from '../../services/auth.service';
       align-items: center;
       justify-content: center;
       color: white;
-      box-shadow: 0 4px 12px rgba(79,70,229,0.4);
+      box-shadow: 0 4px 12px rgba(236,72,153,0.4);
       flex-shrink: 0;
     }
 
@@ -321,7 +321,7 @@ import { AuthService } from '../../services/auth.service';
       font-weight: 700;
       padding: 1px 5px;
       border-radius: 3px;
-      background: rgba(129,140,248,0.15);
+      background: rgba(236,72,153,0.15);
       color: var(--brand);
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -422,11 +422,11 @@ import { AuthService } from '../../services/auth.service';
       justify-content: center;
       letter-spacing: 0.03em;
       transition: all 0.25s var(--ease-spring);
-      box-shadow: 0 2px 8px rgba(79,70,229,0.35);
+      box-shadow: 0 2px 8px rgba(236,72,153,0.35);
     }
 
     .avatar.ring {
-      box-shadow: 0 0 0 2px var(--brand), 0 4px 12px rgba(129,140,248,0.4);
+      box-shadow: 0 0 0 2px var(--brand), 0 4px 12px rgba(236,72,153,0.4);
     }
 
     .avatar-chevron {
