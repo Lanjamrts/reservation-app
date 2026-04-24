@@ -31,4 +31,5 @@ export interface CreateBookingDto {
 export interface UpdateBookingDto {
   status?: BookingStatus;
   notes?: string;
+  version: number;
 }

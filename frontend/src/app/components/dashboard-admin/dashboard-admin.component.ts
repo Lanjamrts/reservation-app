@@ -504,7 +504,22 @@ export class DashboardAdminComponent implements OnInit {
   }
 
   updateBookingStatus(id: string, st: string) {
-    this.bookingService.updateStatus(id, { status: st as BookingStatus }).subscribe();
+    // Récupérer la réservation courante pour obtenir la version
+    const booking = this.allBookings().find(b => b._id === id);
+    if (!booking) {
+      this.showToast('Réservation introuvable', 'error');
+      return;
+    }
+    this.bookingService.updateStatus(id, { status: st as BookingStatus, version: booking.version }).subscribe({
+      next: () => this.showToast('Statut mis à jour', 'success'),
+      error: (err) => {
+        if (err?.error?.message?.includes('modifiée par une autre requête') || err?.status === 409) {
+          this.showToast('Conflit de version, rechargez la page', 'error');
+        } else {
+          this.showToast('Erreur lors de la mise à jour', 'error');
+        }
+      }
+    });
   }
 
   handleRealtimeUpdate(payload: any) {

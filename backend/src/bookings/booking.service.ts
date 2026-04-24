@@ -123,6 +123,28 @@ export class BookingService {
       throw new ConflictException('Réservation modifiée par une autre requête.');
     }
 
+    // Envoi de notification à l'utilisateur selon le nouveau statut
+    if (updated.userId && updated.userName && updated.resourceName && updated.startTime && updated.endTime) {
+      // Récupérer l'email de l'utilisateur si possible (ici supposé stocké dans updated.userEmail)
+      const userEmail = (updated as any).userEmail;
+      if (userEmail) {
+        let notifType: 'booking_confirmed' | 'booking_cancelled' | 'booking_reminder' = 'booking_reminder';
+        if (status === BookingStatus.CONFIRMED) notifType = 'booking_confirmed';
+        else if (status === BookingStatus.CANCELLED) notifType = 'booking_cancelled';
+        else if (status === BookingStatus.PENDING) notifType = 'booking_reminder';
+        this.notificationService.sendNotification({
+          to: userEmail,
+          userName: updated.userName,
+          resourceName: updated.resourceName,
+          startTime: updated.startTime,
+          endTime: updated.endTime,
+          invoiceNumber: updated.invoiceNumber,
+          amount: updated.paymentAmount,
+          type: notifType,
+        }).catch(() => {});
+      }
+    }
+
     this.appGateway.broadcastBookingUpdate({ event: 'booking:updated', booking: updated });
     return updated;
   }
@@ -147,6 +169,23 @@ export class BookingService {
       .exec();
 
     if (!updated) throw new ConflictException('Conflit de modification. Veuillez réessayer.');
+
+    // Envoi de notification à l'utilisateur lors de l'annulation
+    if (updated.userId && updated.userName && updated.resourceName && updated.startTime && updated.endTime) {
+      const userEmail = (updated as any).userEmail;
+      if (userEmail) {
+        this.notificationService.sendNotification({
+          to: userEmail,
+          userName: updated.userName,
+          resourceName: updated.resourceName,
+          startTime: updated.startTime,
+          endTime: updated.endTime,
+          invoiceNumber: updated.invoiceNumber,
+          amount: updated.paymentAmount,
+          type: 'booking_cancelled',
+        }).catch(() => {});
+      }
+    }
 
     this.appGateway.broadcastBookingUpdate({ event: 'booking:cancelled', booking: updated });
     return updated;
