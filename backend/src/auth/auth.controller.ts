@@ -64,7 +64,7 @@ class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
-  profileImage?: string; // base64 encoded image
+  profileImage?: string;
 }
 
 @Controller('auth')
@@ -73,7 +73,6 @@ export class AuthController {
 
   /**
    * POST /api/auth/login
-   * Connexion — retourne un token JWT
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -83,7 +82,6 @@ export class AuthController {
 
   /**
    * POST /api/auth/register
-   * Inscription d'un nouvel utilisateur (admin uniquement pour créer des admins)
    */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -97,38 +95,34 @@ export class AuthController {
 
   /**
    * GET /api/auth/me
-   * Retourne le profil de l'utilisateur connecté
    */
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getProfile(@Request() req: any) {
-    return this.authService.getProfile(req.user.sub);
+  async getMe(@Request() req: any) {
+    return this.authService.getProfile(req.user.userId); // ✅ userId pas sub
   }
 
   /**
    * GET /api/auth/profile
-   * Retourne le profil complet de l'utilisateur connecté
    */
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getFullProfile(@Request() req: any) {
-    return this.authService.getProfile(req.user.sub);
+    return this.authService.getProfile(req.user.userId); // ✅ userId pas sub
   }
 
   /**
    * PUT /api/auth/profile
-   * Mettre à jour le profil de l'utilisateur connecté
    */
   @Put('profile')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async updateProfile(@Request() req: any, @Body() updateProfileDto: UpdateProfileDto) {
-    return this.authService.updateProfile(req.user.sub, updateProfileDto);
+    return this.authService.updateProfile(req.user.userId, updateProfileDto); // ✅ userId pas sub
   }
 
   /**
    * GET /api/auth/users
-   * Liste tous les utilisateurs (admin uniquement)
    */
   @Get('users')
   @UseGuards(JwtAuthGuard, RolesGuard)

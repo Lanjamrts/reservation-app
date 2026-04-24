@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface UserProfile {
   userId: string;
@@ -29,34 +30,16 @@ export interface UpdateProfileRequest {
   providedIn: 'root'
 })
 export class ProfileService {
-  private readonly apiUrl = '/api/auth';
+  private readonly apiUrl = `${environment.apiUrl}/api/auth`;
 
   constructor(private http: HttpClient) {}
 
-  // ✅ Cherche le token dans localStorage et sessionStorage
-  private getAuthHeaders(): HttpHeaders {
-    const token =
-      localStorage.getItem('token') ||
-      localStorage.getItem('access_token') ||
-      sessionStorage.getItem('token') ||
-      sessionStorage.getItem('access_token');
-
-    return new HttpHeaders({
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    });
-  }
-
   getProfile(): Observable<UserProfile> {
-    return this.http.get<UserProfile>(`${this.apiUrl}/profile`, {
-      headers: this.getAuthHeaders(),
-    });
+    return this.http.get<UserProfile>(`${this.apiUrl}/profile`);
   }
 
   updateProfile(data: UpdateProfileRequest): Observable<UserProfile> {
-    return this.http.put<UserProfile>(`${this.apiUrl}/profile`, data, {
-      headers: this.getAuthHeaders(),
-    });
+    return this.http.put<UserProfile>(`${this.apiUrl}/profile`, data);
   }
 
   fileToBase64(file: File): Promise<string> {
