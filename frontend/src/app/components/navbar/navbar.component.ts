@@ -192,21 +192,21 @@ import { AuthService } from '../../services/auth.service';
       position: sticky;
       top: 0;
       z-index: 100;
-      height: 60px;
+      height: 64px;
       display: flex;
       align-items: center;
-      background: rgba(12, 17, 32, 0.5);
-      backdrop-filter: blur(20px) saturate(150%);
-      -webkit-backdrop-filter: blur(20px) saturate(150%);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+      background: rgba(10, 9, 16, 0.7);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+      transition: all 0.3s ease;
       overflow: visible;
     }
 
     .navbar.scrolled {
-      background: rgba(12, 17, 32, 0.88);
-      border-bottom-color: rgba(255,255,255,0.08);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      background: rgba(10, 9, 16, 0.95);
+      border-bottom-color: rgba(139, 92, 246, 0.2);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     }
 
     /* Scroll progress bar */
@@ -215,9 +215,9 @@ import { AuthService } from '../../services/auth.service';
       top: 0;
       left: 0;
       height: 2px;
-      background: var(--gradient-brand);
+      background: var(--gradient-aurora);
       transition: width 0.1s linear;
-      box-shadow: 0 0 8px rgba(236,72,153,0.6);
+      box-shadow: 0 0 10px var(--secondary-glow);
       border-radius: 0 2px 2px 0;
     }
 
@@ -248,14 +248,14 @@ import { AuthService } from '../../services/auth.service';
     .nav-logo:hover { opacity: 0.85; }
 
     .logo-mark {
-      width: 34px; height: 34px;
-      background: var(--gradient-brand-vivid);
-      border-radius: var(--radius-sm);
+      width: 36px; height: 36px;
+      background: var(--gradient-aurora);
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
-      box-shadow: 0 4px 12px rgba(236,72,153,0.4);
+      box-shadow: 0 4px 15px var(--secondary-glow);
       flex-shrink: 0;
     }
 
@@ -321,14 +321,15 @@ import { AuthService } from '../../services/auth.service';
     }
 
     .nav-badge {
-      font-size: 0.6rem;
-      font-weight: 700;
-      padding: 1px 5px;
-      border-radius: 3px;
-      background: rgba(236,72,153,0.15);
-      color: var(--brand);
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--secondary-subtle);
+      color: var(--secondary);
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
+      border: 1px solid var(--secondary-glow);
     }
 
     /* ====================================================
@@ -361,7 +362,7 @@ import { AuthService } from '../../services/auth.service';
       width: 6px; height: 6px;
       border-radius: 50%;
       background: var(--success);
-      box-shadow: 0 0 6px rgba(16,185,129,0.6);
+      box-shadow: 0 0 8px var(--success-bg);
       animation: pulseDot 2s ease-in-out infinite;
       flex-shrink: 0;
     }

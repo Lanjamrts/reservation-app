@@ -517,13 +517,13 @@ interface ResourceWithBookings extends Resource {
                   </div>
 
                   <!-- Payment row -->
-                  @if ($any(bk).paymentAmount > 0) {
+                  @if (bk.paymentAmount && bk.paymentAmount > 0) {
                     <div class="bk-payment">
-                      <span class="badge" [class]="getPaymentBadgeClass($any(bk).paymentStatus)">
+                      <span class="badge" [class]="getPaymentBadgeClass(bk.paymentStatus!)">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                        {{ getPaymentLabel($any(bk).paymentStatus) }}
+                        {{ getPaymentLabel(bk.paymentStatus!) }}
                       </span>
-                      <span class="bk-amount">{{ $any(bk).paymentAmount | number }} Ar</span>
+                      <span class="bk-amount">{{ bk.paymentAmount | number }} Ar</span>
                     </div>
                   }
 
@@ -540,10 +540,10 @@ interface ResourceWithBookings extends Resource {
                     } @else {
                       <span></span>
                     }
-                    @if ($any(bk).invoiceNumber) {
+                    @if (bk.invoiceNumber) {
                       <span class="bk-invoice">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        {{ $any(bk).invoiceNumber }}
+                        {{ bk.invoiceNumber }}
                       </span>
                     }
                   </div>

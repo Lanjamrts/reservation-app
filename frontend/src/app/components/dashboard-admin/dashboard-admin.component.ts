@@ -23,6 +23,13 @@ interface Resource {
   status: 'available' | 'reserved' | 'maintenance';
 }
 
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+  leaving: boolean;
+}
+
 @Component({
   selector: 'app-dashboard-admin',
   standalone: true,
@@ -79,7 +86,7 @@ interface Resource {
              </div>
           </div>
           <div class="kpi-card card">
-             <span class="kpi-icon flex items-center justify-center bg-green-100 text-green-600">💸</span>
+             <span class="kpi-icon flex items-center justify-center bg-yellow-100 text-yellow-600">💸</span>
              <div class="kpi-info">
                <span class="kpi-label">Revenus Confirmés</span>
                <span class="kpi-val">{{ paymentStats()?.totalRevenue | number }} Ar</span>
@@ -93,7 +100,7 @@ interface Resource {
              </div>
           </div>
           <div class="kpi-card card">
-             <span class="kpi-icon flex items-center justify-center bg-amber-100 text-amber-600">🏢</span>
+             <span class="kpi-icon flex items-center justify-center bg-violet-100 text-violet-600">🏢</span>
              <div class="kpi-info">
                <span class="kpi-label">Salles Actives</span>
                <span class="kpi-val">{{ resourceStats()?.available ?? '-' }}/{{ resourceStats()?.total ?? '-' }}</span>
@@ -101,31 +108,40 @@ interface Resource {
           </div>
 
           <!-- Charts Area -->
-          <div class="charts-area mt-4">
-             <div class="chart-box card">
-               <h3 class="chart-title">Revenus des 6 derniers mois</h3>
-               <div class="css-bar-chart">
-                 @for (stat of paymentStats()?.monthlyRevenue; track stat.month) {
+          <div class="charts-area">
+             <div class="chart-box glass full-width">
+                <h3 class="chart-title">Revenus des 6 derniers mois</h3>
+                <div class="css-bar-chart">
+                  @for (stat of paymentStats()?.monthlyRevenue; track stat.month) {
                     <div class="bar-col">
                       <div class="bar-fill" [style.height]="getBarHeight(stat.amount)">
-                        <span class="bar-tooltip">{{ stat.amount | number }} Ar</span>
+                        <div class="bar-tooltip">{{ stat.amount | number }} Ar</div>
                       </div>
                       <span class="bar-label">{{ stat.month | slice:5:7 }}/{{ stat.month | slice:2:4 }}</span>
                     </div>
-                 }
+                  }
+                </div>
+             </div>
+          </div>
+
+          <div class="status-area mt-8">
+             <div class="chart-box glass">
+               <h3 class="chart-title">Statut des Salles</h3>
+               <div class="pie-layout">
+                 <div class="css-pie-chart" [style]="getPieStyles()">
+                   <div class="pie-hole"></div>
+                 </div>
+                 <div class="pie-legend">
+                   <div class="legend-item"><span class="ldot available"></span> Libre ({{ resourceStats()?.available ?? 0 }})</div>
+                   <div class="legend-item"><span class="ldot reserved"></span> Occupée ({{ resourceStats()?.reserved ?? 0 }})</div>
+                   <div class="legend-item"><span class="ldot maint"></span> Maint. ({{ resourceStats()?.maintenance ?? 0 }})</div>
+                 </div>
                </div>
              </div>
-
-             <div class="chart-box card">
-               <h3 class="chart-title">Statut des Salles</h3>
-               <div class="css-pie-chart" [style]="getPieStyles()">
-                 <div class="pie-hole"></div>
-               </div>
-               <div class="pie-legend mt-4">
-                 <div class="legend-item"><span class="ldot available"></span> Libre ({{ resourceStats()?.available ?? 0 }})</div>
-                 <div class="legend-item"><span class="ldot reserved"></span> Occupée ({{ resourceStats()?.reserved ?? 0 }})</div>
-                 <div class="legend-item"><span class="ldot maint"></span> Maint. ({{ resourceStats()?.maintenance ?? 0 }})</div>
-               </div>
+             
+             <!-- Emplacement pour un futur graphique ou info -->
+             <div class="chart-box glass" style="justify-content: center; align-items: center; opacity: 0.5; border: 1px dashed var(--border-subtle);">
+                <p class="text-muted">Statistiques Supplémentaires</p>
              </div>
           </div>
         </div>
@@ -165,13 +181,17 @@ interface Resource {
             </div>
 
             <div class="form-group">
-              <label>URL Photo (séparées par une virgule)</label>
-              <input type="text" [ngModel]="resForm.photos.join(', ')" (ngModelChange)="updatePhotos($event)" placeholder="https://..., https://..." class="form-control" />
-              @if (resForm.photos.length) {
-                <div class="photo-preview mt-2">
-                  @for (p of resForm.photos; track p) { <img [src]="p" alt="preview" /> }
-                </div>
-              }
+              <label>Image de la salle</label>
+              <div class="image-select-grid">
+                @for (img of availableImages; track img) {
+                  <img [src]="img" alt="image salle" class="selectable-img"
+                    [class.selected-img]="resForm.photos[0] === img"
+                    (click)="selectImage(img)" />
+                }
+              </div>
+              <div *ngIf="resForm.photos.length" class="photo-preview mt-2">
+                <img [src]="resForm.photos[0]" alt="preview" style="max-width:120px; border-radius:8px; border:2px solid #4f46e5;" />
+              </div>
             </div>
 
             <div class="form-group">
@@ -251,117 +271,183 @@ interface Resource {
              <button (click)="loadBookings()" class="btn btn-outline btn-sm">↻ Actualiser le tableau</button>
            </div>
 
-           <div class="table-container card-elevated">
-             <table class="admin-table">
-               <thead>
-                 <tr>
-                   <th>Référence</th>
-                   <th>Client</th>
-                   <th>Salle & Créneau</th>
-                   <th>Paiement</th>
-                   <th>Statut Résa.</th>
-                   <th class="text-right">Actions</th>
-                 </tr>
-               </thead>
-               <tbody>
-                 @for (booking of filteredBookings(); track booking._id) {
-                   <tr [class.row-highlight]="recentUpdates().has(booking._id)">
-                     <td>
-                        <span class="text-xs text-muted font-mono">{{ $any(booking).invoiceNumber || 'N/A' }}</span>
-                     </td>
-                     <td>
-                        <div class="font-bold">{{ booking.userName }}</div>
-                        <div class="text-xs text-muted">{{ booking.userId.substring(0,8) }}...</div>
-                     </td>
-                     <td>
-                        <div class="font-semibold text-primary">{{ booking.resourceName }}</div>
-                        <div class="text-sm">{{ booking.startTime | date:'dd/MM/yyyy HH:mm' }}</div>
-                     </td>
-                     <td>
-                        <div class="font-bold">{{ $any(booking).paymentAmount | number }} Ar</div>
-                        <span class="badge" [class]="'badge-' + ($any(booking).paymentStatus || 'unpaid')">
-                          {{ getPaymentLabel($any(booking).paymentStatus) }}
-                        </span>
-                     </td>
-                     <td>
-                        <span class="badge" [class]="'badge-' + booking.status">{{ getBookingStatusLabel(booking.status) }}</span>
-                     </td>
-                     <td class="text-right">
-                        @if (booking.status === 'pending') {
-                           <button class="btn btn-icon btn-success-light mr-1" title="Confirmer" (click)="updateBookingStatus(booking._id, 'confirmed')">✓</button>
-                        }
-                        @if (booking.status !== 'cancelled') {
-                           <button class="btn btn-icon btn-danger-light" title="Annuler" (click)="updateBookingStatus(booking._id, 'cancelled')">✕</button>
-                        }
-                     </td>
-                   </tr>
-                 } @empty {
-                   <tr><td colspan="6" class="text-center py-12 text-muted">Aucune réservation trouvée dans cette catégorie.</td></tr>
-                 }
-               </tbody>
-             </table>
+           <div class="booking-grid">
+             @for (booking of filteredBookings(); track booking._id) {
+               <div class="booking-card animate-in" [class.new-update]="recentUpdates().has(booking._id)"
+                 [style.background-image]="'url(' + getResourcePhoto(booking.resourceId) + ')'">
+                 <div class="booking-card-overlay">
+                   <div class="bc-header">
+                     <span class="invoice-num">{{ booking.invoiceNumber || 'N/A' }}</span>
+                     <span class="badge" [class]="'badge-' + booking.status">{{ getBookingStatusLabel(booking.status) }}</span>
+                   </div>
+                   
+                   <div class="bc-content">
+                     <h4 class="resource-name">{{ booking.resourceName }}</h4>
+                     <p class="booking-time">📅 {{ booking.startTime | date:'dd MMM yyyy, HH:mm' }}</p>
+                     
+                     <div class="client-info mt-3">
+                       <div class="client-avatar">{{ booking.userName.substring(0,1) }}</div>
+                       <div>
+                         <div class="client-name">{{ booking.userName }}</div>
+                         <div class="client-id">ID: {{ booking.userId.substring(0,8) }}...</div>
+                       </div>
+                     </div>
+                   </div>
+
+                   <div class="bc-footer">
+                     <div class="payment-info">
+                       <span class="amount">{{ booking.paymentAmount | number }} Ar</span>
+                       <span class="p-status" [class]="booking.paymentStatus || 'unpaid'">
+                         {{ getPaymentLabel(booking.paymentStatus || 'unpaid') }}
+                       </span>
+                     </div>
+                     
+                     <div class="bc-actions">
+                       @if (booking.status === 'pending') {
+                          <button class="btn btn-icon btn-success-light" title="Confirmer" (click)="updateBookingStatus(booking._id, 'confirmed')">✓</button>
+                       }
+                       @if (booking.status !== 'cancelled') {
+                          <button class="btn btn-icon btn-danger-light" title="Annuler" (click)="updateBookingStatus(booking._id, 'cancelled')">✕</button>
+                       }
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             } @empty {
+               <div class="empty-state text-center py-20 w-full glass card">
+                 <p class="text-muted">Aucune réservation trouvée dans cette catégorie.</p>
+               </div>
+             }
            </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .admin-page { padding: 0 24px 80px; max-width: 1400px; margin: 0 auto; }
-    .admin-header { display: flex; justify-content: space-between; align-items: flex-end; margin: 32px 0 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
-    .admin-nav { display: flex; gap: 8px; background: white; padding: 6px; border-radius: 16px; width: fit-content; box-shadow: var(--shadow-sm); border: 1px solid var(--border); }
-    .nav-tab { padding: 10px 20px; border: none; background: transparent; font-weight: 600; color: var(--text-muted); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
-    .nav-tab.active { background: var(--primary-light); color: var(--primary); }
-    .nav-tab:not(.active):hover { background: var(--surface-2); }
+    .admin-page { padding: 0 40px 80px; width: 100%; max-width: 100%; position: relative; z-index: 2; margin: 0; }
+    .admin-header { display: flex; justify-content: space-between; align-items: flex-end; margin: 32px 0 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border-subtle); }
+    .admin-nav { display: flex; gap: 8px; background: var(--bg-surface); padding: 8px; border-radius: 20px; width: fit-content; box-shadow: var(--shadow-md); border: 1px solid var(--border-subtle); backdrop-filter: blur(10px); }
+    .nav-tab { padding: 12px 24px; border: none; background: transparent; font-weight: 700; color: var(--text-muted); border-radius: 14px; cursor: pointer; transition: all var(--transition-base); font-family: var(--font-display); font-size: 0.9rem; }
+    .nav-tab.active { background: var(--gradient-brand); color: white; box-shadow: 0 4px 15px var(--brand-glow); }
+    .nav-tab:not(.active):hover { background: var(--bg-elevated); color: var(--text-secondary); }
 
-    /* KPI */
-    .overview-grid { }
-    .charts-area { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px; }
-    @media (max-width: 1024px) { .charts-area { grid-template-columns: 1fr; } }
-    .kpi-card { display: flex; align-items: center; gap: 16px; padding: 20px; }
-    .kpi-icon { width: 56px; height: 56px; border-radius: 16px; font-size: 1.5rem; }
-    .kpi-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 4px; }
-    .kpi-val { font-size: 1.8rem; font-weight: 800; color: var(--text-primary); line-height: 1; }
-    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+    .charts-area { display: grid; grid-template-columns: 1fr; gap: 40px; margin-top: 40px; width: 100%; }
+    .status-area { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    @media (max-width: 1300px) { .status-area { grid-template-columns: 1fr; } }
+    .kpi-card { display: flex; align-items: center; gap: 20px; padding: 24px; border-radius: var(--radius-lg); background: var(--gradient-card); border: 1px solid var(--border-subtle); position: relative; overflow: hidden; }
+    .kpi-card::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, var(--secondary-subtle) 0%, transparent 70%); opacity: 0.3; pointer-events: none; }
+    .kpi-icon { width: 64px; height: 64px; border-radius: 18px; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 10px rgba(255,255,255,0.1); }
+    .kpi-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 800; display: block; margin-bottom: 6px; }
+    .kpi-val { font-size: 2.2rem; font-weight: 800; color: var(--text-primary); line-height: 1; font-family: var(--font-display); }
 
     /* CHARTS */
-    .chart-box { padding: 24px; }
-    .chart-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 24px; color: var(--text-secondary); }
+    .chart-box { padding: 36px; min-height: 480px; display: flex; flex-direction: column; }
+    .chart-box.full-width { grid-column: 1 / -1; }
+    .chart-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 40px; color: var(--text-secondary); font-family: var(--font-display); }
     
-    .css-bar-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 200px; padding-top: 20px; }
-    .bar-col { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 10%; height: 100%; justify-content: flex-end; }
-    .bar-fill { width: 100%; background: var(--gradient-brand); border-radius: 6px 6px 0 0; position: relative; transition: height 1s var(--ease-spring); min-height: 4px; }
-    .bar-label { font-size: 0.75rem; color: var(--text-faint); font-weight: 600; }
-    .bar-tooltip { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; }
-    .bar-fill:hover .bar-tooltip { opacity: 1; }
+    .css-bar-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 320px; padding: 20px 40px 0; border-bottom: 2px solid var(--border-subtle); margin-bottom: 20px; flex: 1; }
+    .bar-col { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 10%; height: 100%; justify-content: flex-end; }
+    .bar-fill { width: 100%; background: var(--gradient-aurora); border-radius: 14px 14px 0 0; position: relative; transition: all 1s var(--ease-spring); min-height: 8px; box-shadow: 0 12px 30px var(--secondary-glow); }
+    .bar-label { font-size: 1rem; color: var(--text-secondary); font-weight: 800; padding: 14px 0; }
+    .bar-fill:hover { filter: brightness(1.15); transform: scaleX(1.02) translateY(-2px); box-shadow: 0 15px 35px var(--secondary-glow); }
 
-    .css-pie-chart { width: 180px; height: 180px; border-radius: 50%; background: #e2e8f0; margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center; }
-    .pie-hole { width: 120px; height: 120px; background: white; border-radius: 50%; }
-    .pie-legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 0.85rem; font-weight: 600; }
-    .ldot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; }
-    .ldot.available { background: var(--success); }
-    .ldot.reserved { background: var(--warning); }
-    .ldot.maint { background: var(--danger); }
+    /* Pie / Status Chart */
+    .pie-layout { display: flex; align-items: center; gap: 32px; flex: 1; justify-content: center; width: 100%; }
+    @media (max-width: 1400px) { .pie-layout { flex-direction: column; } }
+    
+    .css-pie-chart { width: 280px; height: 280px; border-radius: 50%; background: var(--bg-elevated); position: relative; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-xl), inset 0 0 30px rgba(0,0,0,0.6); flex-shrink: 0; }
+    .pie-hole { width: 190px; height: 190px; background: var(--bg-surface); border-radius: 50%; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+    .pie-legend { display: flex; flex-direction: column; gap: 20px; flex: 1; min-width: 180px; padding: 20px 0; }
+    .legend-item { display: flex; align-items: center; font-size: 1rem; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+    .ldot { width: 12px; height: 12px; border-radius: 4px; display: inline-block; margin-right: 12px; }
+    .ldot.available { background: var(--success); box-shadow: 0 0 10px var(--success-bg); }
+    .ldot.reserved { background: var(--warning); box-shadow: 0 0 10px var(--warning-bg); }
+    .ldot.maint { background: var(--danger); box-shadow: 0 0 10px var(--danger-bg); }
 
     /* RESOURCES TAB */
-    .resources-layout { display: grid; grid-template-columns: 420px 1fr; gap: 32px; align-items: start; }
-    @media(max-width: 900px) { .resources-layout { grid-template-columns: 1fr; } }
-    .resource-form-section { padding: 28px; }
-    .amenities-selector { display: flex; flex-wrap: wrap; gap: 8px; }
-    .photo-preview { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-    .photo-preview img { width: 60px; height: 45px; object-fit: cover; border-radius: 6px; }
+    .resources-layout { display: grid; grid-template-columns: 440px 1fr; gap: 40px; align-items: start; }
+    @media(max-width: 1100px) { .resources-layout { grid-template-columns: 1fr; } }
+    .resource-form-section { padding: 32px; background: var(--gradient-card); }
+    .amenities-selector { display: flex; flex-wrap: wrap; gap: 10px; }
+    .photo-preview { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+    .photo-preview img { width: 80px; height: 60px; object-fit: cover; border-radius: 10px; border: 2px solid var(--border-subtle); }
 
-    .admin-room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-    .admin-room-card { padding: 20px; }
-    .admin-room-card.is-maint { opacity: 0.7; border: 1px dashed var(--danger); }
-    .arc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
+    .admin-room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+    .admin-room-card { padding: 24px; background: var(--bg-surface); border: 1px solid var(--border-subtle); transition: all 0.3s; }
+    .admin-room-card:hover { border-color: var(--border-brand); transform: translateY(-5px); box-shadow: var(--shadow-lg); }
+    .admin-room-card.is-maint { opacity: 0.6; grayscale: 1; border: 1px dashed var(--danger); }
+    .arc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 
-    .bg-blue-100 { background-color: #dbeafe; } .text-blue-600 { color: #2563eb; }
-    .bg-green-100 { background-color: #dcfce7; } .text-green-600 { color: #16a34a; }
-    .bg-purple-100 { background-color: #f3e8ff; } .text-purple-600 { color: #9333ea; }
-    .bg-amber-100 { background-color: #fef3c7; } .text-amber-600 { color: #d97706; }
-    .border-t { border-top: 1px solid var(--border); }
-    .pt-3 { padding-top: 12px; }
-    .mr-1 { margin-right: 4px; }
+    .bg-blue-100 { background: var(--info-bg); } .text-blue-600 { color: var(--info); }
+    .bg-yellow-100 { background: var(--success-bg); } .text-yellow-600 { color: var(--success); }
+    .bg-purple-100 { background: var(--secondary-subtle); } .text-purple-600 { color: var(--secondary); }
+    .bg-violet-100 { background: var(--secondary-subtle); } .text-violet-600 { color: var(--secondary); }
+    .bg-amber-100 { background: var(--brand-subtle); } .text-amber-600 { color: var(--brand); }
+    .border-t { border-top: 1px solid var(--border-subtle); }
+    .pt-3 { padding-top: 16px; }
+    .mr-1 { margin-right: 6px; }
+    .image-select-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+    .selectable-img { width: 80px; height: 60px; object-fit: cover; border-radius: 10px; border: 2px solid var(--border-default); cursor: pointer; transition: all 0.2s; }
+    .selectable-img:hover { transform: scale(1.05); border-color: var(--border-medium); }
+    .selectable-img.selected-img { border: 2px solid var(--brand); box-shadow: 0 0 15px var(--brand-glow); transform: scale(1.1); }
+
+    /* BOOKING CARDS */
+    .booking-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 32px; }
+    .booking-card { 
+      height: 300px; 
+      border-radius: var(--radius-lg); 
+      background-size: cover; 
+      background-position: center; 
+      position: relative; 
+      overflow: hidden; 
+      box-shadow: var(--shadow-lg);
+      transition: all 0.4s var(--ease-spring);
+      cursor: pointer;
+      border: 1px solid var(--border-subtle);
+    }
+    .booking-card:hover { transform: translateY(-12px) scale(1.02); box-shadow: 0 25px 50px rgba(0,0,0,0.5), 0 0 20px var(--secondary-glow); border-color: var(--border-brand); }
+    .booking-card-overlay { 
+      position: absolute; inset: 0; 
+      background: linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(10,9,16,0.95) 100%);
+      padding: 28px; display: flex; flex-direction: column; justify-content: space-between;
+      backdrop-filter: blur(1px);
+      transition: all 0.4s;
+    }
+    .booking-card:hover .booking-card-overlay { backdrop-filter: blur(0px); background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(10,9,16,0.98) 100%); }
+    
+    .bc-header { display: flex; justify-content: space-between; align-items: center; }
+    .invoice-num { font-family: 'Outfit', monospace; font-size: 0.8rem; font-weight: 700; color: white; background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+    
+    .resource-name { font-size: 1.75rem; font-weight: 800; color: white; margin-bottom: 6px; text-shadow: 0 3px 6px rgba(0,0,0,0.8); font-family: var(--font-display); line-height: 1.1; }
+    .booking-time { font-size: 0.95rem; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    
+    .client-info { display: flex; align-items: center; gap: 14px; }
+    .client-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--gradient-aurora); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .client-name { font-weight: 700; color: white; font-size: 1rem; }
+    .client-id { font-size: 0.8rem; color: var(--text-muted); }
+    
+    .bc-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
+    .payment-info { display: flex; flex-direction: column; gap: 4px; }
+    .amount { font-size: 1.5rem; font-weight: 800; color: var(--brand); font-family: var(--font-display); }
+    .p-status { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; width: fit-content; }
+    .p-status.paid { color: var(--success); border: 1px solid var(--success-border); }
+    .p-status.unpaid { color: var(--danger); border: 1px solid var(--danger-border); }
+    .p-status.pending { color: var(--warning); border: 1px solid var(--warning-border); }
+    
+    .bc-actions { display: flex; gap: 10px; }
+    
+    .animate-in { animation: fadeInUp 0.7s var(--ease-spring) both; }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .new-update { animation: pulseBorder 2s infinite; border: 2px solid var(--brand); }
+    @keyframes pulseBorder {
+      0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
+      70% { box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
   `]
 })
 export class DashboardAdminComponent implements OnInit {
@@ -386,11 +472,32 @@ export class DashboardAdminComponent implements OnInit {
   editingResource = signal<Resource|null>(null);
   
   recentUpdates = signal<Set<string>>(new Set());
-  toasts = signal<any[]>([]);
+  toasts = signal<Toast[]>([]);
   toastCounter = 0;
   wsConnected = signal(false);
 
   availableAmenities = ['WiFi', 'Projecteur', 'Tableau blanc', 'Climatisation', 'Visioconférence', 'Imprimante', 'Cuisine', 'Parking'];
+  // Liste des images disponibles dans le dossier images
+  availableImages = [
+    'assets/images/image1.jpg',
+    'assets/images/image2.jpg',
+    'assets/images/image3.jpg',
+    'assets/images/image4.jpg',
+    'assets/images/image5.jpg',
+    'assets/images/image6.jpg',
+    'assets/images/image7.jpg',
+    'assets/images/image8.jpg',
+    'assets/images/image9.jpg',
+    'assets/images/image10.jpg',
+  ];
+    selectImage(img: string) {
+      this.resForm.photos = [img];
+    }
+
+  getResourcePhoto(resourceId: string): string {
+    const res = this.resources().find(r => r._id === resourceId);
+    return res?.photos?.[0] || 'assets/images/image1.jpg';
+  }
   resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', photos: [] as string[], amenities: [] as string[] };
 
   filteredBookings = computed(() => {
@@ -544,9 +651,12 @@ export class DashboardAdminComponent implements OnInit {
   showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     const id = ++this.toastCounter;
     this.toasts.update(t => [...t, { id, message, type, leaving: false }]);
+    
+    // Use local references to help compiler and avoid closure issues
+    const currentToasts = this.toasts;
     setTimeout(() => {
-      this.toasts.update(t => t.map(x => x.id === id ? { ...x, leaving: true } : x));
-      setTimeout(() => this.toasts.update(t => t.filter(x => x.id !== id)), 400);
+      currentToasts.update(t => t.map(x => x.id === id ? { ...x, leaving: true } : x));
+      setTimeout(() => currentToasts.update(t => t.filter(x => x.id !== id)), 400);
     }, 3500);
   }
 }
