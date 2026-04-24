@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export interface UserProfile {
@@ -33,35 +33,36 @@ export class ProfileService {
 
   constructor(private http: HttpClient) {}
 
-  /**
-   * Récupère le profil complet de l'utilisateur connecté
-   */
+  // ✅ Cherche le token dans localStorage et sessionStorage
+  private getAuthHeaders(): HttpHeaders {
+    const token =
+      localStorage.getItem('token') ||
+      localStorage.getItem('access_token') ||
+      sessionStorage.getItem('token') ||
+      sessionStorage.getItem('access_token');
+
+    return new HttpHeaders({
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    });
+  }
+
   getProfile(): Observable<UserProfile> {
-    return this.http.get<UserProfile>(`${this.apiUrl}/profile`);
+    return this.http.get<UserProfile>(`${this.apiUrl}/profile`, {
+      headers: this.getAuthHeaders(),
+    });
   }
 
-  /**
-   * Met à jour le profil de l'utilisateur
-   */
   updateProfile(data: UpdateProfileRequest): Observable<UserProfile> {
-    return this.http.put<UserProfile>(`${this.apiUrl}/profile`, data);
+    return this.http.put<UserProfile>(`${this.apiUrl}/profile`, data, {
+      headers: this.getAuthHeaders(),
+    });
   }
 
-  /**
-   * Convertit une image File en base64
-   */
   fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
-        let result = reader.result as string;
-        // Vérifie si le préfixe data:image est présent, sinon l'ajoute
-        if (!result.startsWith('data:image')) {
-          const ext = file.type || 'image/png';
-          result = `data:${ext};base64,${btoa(result)}`;
-        }
-        resolve(result);
-      };
+      reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });

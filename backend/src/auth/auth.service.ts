@@ -23,18 +23,14 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // ─── Valider les credentials ───────────────────────────────────────────────
   async validateUser(username: string, password: string): Promise<UserDocument | null> {
     const user = await this.userModel.findOne({ username }).exec();
     if (!user) return null;
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return null;
-
     return user;
   }
 
-  // ─── Login → retourne JWT ──────────────────────────────────────────────────
   async login(username: string, password: string): Promise<{ access_token: string; user: object }> {
     const user = await this.validateUser(username, password);
     if (!user) {
@@ -47,10 +43,8 @@ export class AuthService {
       role: user.role,
     };
 
-    const access_token = this.jwtService.sign(payload);
-
     return {
-      access_token,
+      access_token: this.jwtService.sign(payload),
       user: {
         userId: user._id.toString(),
         username: user.username,
@@ -59,7 +53,6 @@ export class AuthService {
     };
   }
 
-  // ─── Trouver un utilisateur par ID ────────────────────────────────────────
   async findById(userId: string): Promise<object | null> {
     const user = await this.userModel.findById(userId).select('-password').exec();
     if (!user) return null;
@@ -70,7 +63,6 @@ export class AuthService {
     };
   }
 
-  // ─── Créer un utilisateur (register) ──────────────────────────────────────
   async register(
     username: string,
     password: string,
@@ -80,14 +72,8 @@ export class AuthService {
     if (existing) {
       throw new ConflictException(`L'utilisateur "${username}" existe déjà`);
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await this.userModel.create({
-      username,
-      password: hashedPassword,
-      role,
-    });
-
+    const user = await this.userModel.create({ username, password: hashedPassword, role });
     return {
       userId: user._id.toString(),
       username: user.username,
@@ -95,7 +81,6 @@ export class AuthService {
     };
   }
 
-  // ─── Lister tous les utilisateurs (admin) ─────────────────────────────────
   async findAll(): Promise<object[]> {
     const users = await this.userModel.find().select('-password').exec();
     return users.map((u) => ({
@@ -105,12 +90,9 @@ export class AuthService {
     }));
   }
 
-  // ─── Récupérer le profil complet ───────────────────────────────────────────
   async getProfile(userId: string): Promise<object> {
     const user = await this.userModel.findById(userId).select('-password').exec();
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
 
     return {
       userId: user._id.toString(),
@@ -123,23 +105,21 @@ export class AuthService {
       profileImage: user.profileImage || null,
       role: user.role,
       createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
-  // ─── Mettre à jour le profil ──────────────────────────────────────────────
   async updateProfile(userId: string, updateData: any): Promise<object> {
     const user = await this.userModel.findById(userId).exec();
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
+    if (!user) throw new NotFoundException('Utilisateur non trouvé');
 
-    // Mettre à jour les champs autorisés
-    if (updateData.firstName) user.firstName = updateData.firstName;
-    if (updateData.lastName) user.lastName = updateData.lastName;
-    if (updateData.email) user.email = updateData.email;
-    if (updateData.phone) user.phone = updateData.phone;
-    if (updateData.bio) user.bio = updateData.bio;
-    if (updateData.profileImage) user.profileImage = updateData.profileImage;
+    // ✅ Fix : utiliser !== undefined pour permettre les chaînes vides
+    if (updateData.firstName !== undefined) user.firstName = updateData.firstName;
+    if (updateData.lastName !== undefined) user.lastName = updateData.lastName;
+    if (updateData.email !== undefined) user.email = updateData.email;
+    if (updateData.phone !== undefined) user.phone = updateData.phone;
+    if (updateData.bio !== undefined) user.bio = updateData.bio;
+    if (updateData.profileImage !== undefined) user.profileImage = updateData.profileImage;
 
     user.updatedAt = new Date();
     await user.save();
@@ -159,7 +139,6 @@ export class AuthService {
     };
   }
 
-  // ─── Hasher un mot de passe (utilitaire) ──────────────────────────────────
   async hashPassword(plain: string): Promise<string> {
     return bcrypt.hash(plain, 10);
   }

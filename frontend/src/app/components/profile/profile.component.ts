@@ -13,13 +13,13 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       <div class="profile-header">
         <div class="profile-image-wrapper">
           <img 
-            *ngIf="profileData?.profileImage"
-            [src]="profileData?.profileImage"
+            *ngIf="previewImage || profileData?.profileImage"
+            [src]="previewImage || profileData?.profileImage"
             alt="Photo de profil"
             class="profile-image"
           />
           <div 
-            *ngIf="!profileData?.profileImage"
+            *ngIf="!previewImage && !profileData?.profileImage"
             class="profile-image-placeholder"
           >
             <div class="placeholder-initials">
@@ -99,7 +99,7 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
               id="phone"
               type="tel"
               formControlName="phone"
-              placeholder="+33 6 12 34 56 78"
+              placeholder="+261 34 00 000 00"
               class="form-input"
             />
           </div>
@@ -120,7 +120,7 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
           <div class="form-actions">
             <button
               type="submit"
-              [disabled]="isSubmitting || !profileForm.dirty"
+              [disabled]="isSubmitting || (!profileForm.dirty && !selectedFile)"
               class="btn-save"
             >
               {{ isSubmitting ? 'Enregistrement...' : '💾 Enregistrer les modifications' }}
@@ -128,7 +128,7 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
             <button
               type="button"
               (click)="onCancel()"
-              [disabled]="!profileForm.dirty"
+              [disabled]="!profileForm.dirty && !selectedFile"
               class="btn-cancel"
             >
               Annuler
@@ -176,7 +176,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       padding: 40px 20px;
     }
 
-    /* Header du profil */
     .profile-header {
       display: flex;
       align-items: flex-start;
@@ -280,7 +279,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       color: var(--text-primary);
     }
 
-    /* Section formulaire */
     .profile-form-section {
       background: var(--bg-surface);
       padding: 40px;
@@ -350,7 +348,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       font-size: 0.85rem;
     }
 
-    /* Boutons d'action */
     .form-actions {
       grid-column: 1 / -1;
       display: flex;
@@ -401,7 +398,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       cursor: not-allowed;
     }
 
-    /* Messages */
     .success-message,
     .error-message {
       grid-column: 1 / -1;
@@ -423,7 +419,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       border: 1px solid var(--danger-border);
     }
 
-    /* Section info */
     .profile-info-section {
       background: var(--bg-surface);
       padding: 30px;
@@ -471,7 +466,6 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
       word-break: break-all;
     }
 
-    /* Responsif */
     @media (max-width: 768px) {
       .profile-header {
         flex-direction: column;
@@ -504,6 +498,10 @@ export class ProfileComponent implements OnInit {
   isSubmitting = false;
   successMessage = '';
   errorMessage = '';
+  
+  // ✅ AJOUT : stocker le fichier sélectionné et la prévisualisation séparément
+  selectedFile: File | null = null;
+  previewImage: string | null = null;
 
   constructor(
     private profileService: ProfileService,
@@ -516,9 +514,6 @@ export class ProfileComponent implements OnInit {
     this.loadProfile();
   }
 
-  /**
-   * Initialise le formulaire réactif
-   */
   private initializeForm(): void {
     this.profileForm = this.fb.group({
       firstName: ['', Validators.maxLength(100)],
@@ -526,13 +521,10 @@ export class ProfileComponent implements OnInit {
       email: ['', [Validators.email]],
       phone: ['', Validators.maxLength(20)],
       bio: ['', Validators.maxLength(500)],
-      profileImage: ['']
     });
+    // ✅ profileImage retiré du FormGroup — géré séparément via selectedFile
   }
 
-  /**
-   * Charge le profil de l'utilisateur
-   */
   private loadProfile(): void {
     this.profileService.getProfile().subscribe({
       next: (data) => {
@@ -543,9 +535,11 @@ export class ProfileComponent implements OnInit {
           email: data.email || '',
           phone: data.phone || '',
           bio: data.bio || '',
-          profileImage: data.profileImage || ''
         });
         this.profileForm.markAsPristine();
+        // ✅ Reset de la prévisualisation et du fichier sélectionné
+        this.selectedFile = null;
+        this.previewImage = null;
       },
       error: (err) => {
         console.error('Erreur lors du chargement du profil:', err);
@@ -555,7 +549,7 @@ export class ProfileComponent implements OnInit {
   }
 
   /**
-   * Gère la sélection d'une image
+   * ✅ CORRIGÉ : Compression + prévisualisation immédiate sans mettre dans le form
    */
   async onImageSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -563,25 +557,69 @@ export class ProfileComponent implements OnInit {
 
     if (!file) return;
 
-    // Vérifier la taille (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      this.errorMessage = 'L\'image doit faire moins de 2MB';
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      this.errorMessage = 'L\'image doit faire moins de 5MB';
+      return;
+    }
+
+    // Vérifier le type
+    if (!file.type.startsWith('image/')) {
+      this.errorMessage = 'Veuillez sélectionner une image valide';
       return;
     }
 
     try {
-      const base64 = await this.profileService.fileToBase64(file);
-      this.profileForm.patchValue({ profileImage: base64 });
-      this.profileForm.markAsDirty();
-      this.successMessage = 'Image sélectionnée. N\'oubliez pas d\'enregistrer !';
+      // ✅ Compresser l'image avant envoi pour éviter le 413
+      const compressedBase64 = await this.compressImage(file, 800, 800, 0.7);
+      
+      this.selectedFile = file;
+      this.previewImage = compressedBase64; // Affichage immédiat dans le header
+      
+      this.successMessage = 'Image sélectionnée. Cliquez sur Enregistrer pour sauvegarder.';
       setTimeout(() => this.successMessage = '', 3000);
+      this.errorMessage = '';
     } catch (error) {
       this.errorMessage = 'Erreur lors de la lecture de l\'image';
     }
   }
 
   /**
-   * Soumet le formulaire
+   * ✅ NOUVEAU : Compression d'image via canvas
+   */
+  private compressImage(file: File, maxWidth: number, maxHeight: number, quality: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Redimensionner si trop grand
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+      };
+      reader.onerror = reject;
+    });
+  }
+
+  /**
+   * ✅ CORRIGÉ : Envoie FormData avec l'image compressée en base64
    */
   onSubmit(): void {
     if (!this.profileForm.valid) {
@@ -593,11 +631,19 @@ export class ProfileComponent implements OnInit {
     this.successMessage = '';
     this.errorMessage = '';
 
-    this.profileService.updateProfile(this.profileForm.value).subscribe({
+    // ✅ Construire le payload avec l'image si sélectionnée
+    const payload: any = { ...this.profileForm.value };
+    if (this.previewImage) {
+      payload.profileImage = this.previewImage;
+    }
+
+    this.profileService.updateProfile(payload).subscribe({
       next: (data) => {
         this.profileData = data;
         this.profileForm.markAsPristine();
         this.isSubmitting = false;
+        this.selectedFile = null;
+        // ✅ Garder la prévisualisation après sauvegarde
         this.successMessage = 'Profil mis à jour avec succès ! ✅';
         setTimeout(() => this.successMessage = '', 5000);
       },
@@ -609,16 +655,12 @@ export class ProfileComponent implements OnInit {
     });
   }
 
-  /**
-   * Annule les modifications
-   */
   onCancel(): void {
     this.loadProfile();
+    this.previewImage = null;
+    this.selectedFile = null;
   }
 
-  /**
-   * Retourne les initiales de l'utilisateur
-   */
   getInitials(): string {
     const first = this.profileData?.firstName?.charAt(0) || '';
     const last = this.profileData?.lastName?.charAt(0) || '';
