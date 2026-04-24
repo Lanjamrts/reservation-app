@@ -140,6 +140,10 @@ import { AuthService } from '../../services/auth.service';
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
                     Mes réservations
                   </a>
+                  <a routerLink="/profile" class="avatar-menu-item" (click)="avatarMenuOpen.set(false)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Mon profil
+                  </a>
                   @if (authService.isAdmin()) {
                     <a routerLink="/dashboard" class="avatar-menu-item" (click)="avatarMenuOpen.set(false)">
                       <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2H3V4zM3 9h6v8H4a1 1 0 01-1-1V9zm8 0h6v7a1 1 0 01-1 1h-5V9z"/></svg>

@@ -105,6 +105,60 @@ export class AuthService {
     }));
   }
 
+  // ─── Récupérer le profil complet ───────────────────────────────────────────
+  async getProfile(userId: string): Promise<object> {
+    const user = await this.userModel.findById(userId).select('-password').exec();
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    return {
+      userId: user._id.toString(),
+      username: user.username,
+      email: user.email || '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      phone: user.phone || '',
+      bio: user.bio || '',
+      profileImage: user.profileImage || null,
+      role: user.role,
+      createdAt: user.createdAt,
+    };
+  }
+
+  // ─── Mettre à jour le profil ──────────────────────────────────────────────
+  async updateProfile(userId: string, updateData: any): Promise<object> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Mettre à jour les champs autorisés
+    if (updateData.firstName) user.firstName = updateData.firstName;
+    if (updateData.lastName) user.lastName = updateData.lastName;
+    if (updateData.email) user.email = updateData.email;
+    if (updateData.phone) user.phone = updateData.phone;
+    if (updateData.bio) user.bio = updateData.bio;
+    if (updateData.profileImage) user.profileImage = updateData.profileImage;
+
+    user.updatedAt = new Date();
+    await user.save();
+
+    return {
+      userId: user._id.toString(),
+      username: user.username,
+      email: user.email || '',
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      phone: user.phone || '',
+      bio: user.bio || '',
+      profileImage: user.profileImage || null,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   // ─── Hasher un mot de passe (utilitaire) ──────────────────────────────────
   async hashPassword(plain: string): Promise<string> {
     return bcrypt.hash(plain, 10);
