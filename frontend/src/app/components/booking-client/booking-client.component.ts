@@ -1257,6 +1257,31 @@ interface ResourceWithBookings extends Resource {
     /* ═══════════════════════════════════════════════════
        MODAL OVERRIDES
     ═══════════════════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+    }
+
+    .modal-content {
+      position: relative;
+      width: min(100%, 700px);
+      max-height: calc(100vh - 80px);
+      overflow-y: auto;
+      background: var(--bg-default);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-default);
+      box-shadow: 0 26px 75px rgba(15, 23, 42, 0.28);
+      padding: 32px;
+      z-index: 1001;
+    }
+
     .modal-glow-line {
       position: absolute;
       top: 0; left: 15%; right: 15%;
@@ -1501,29 +1526,29 @@ interface ResourceWithBookings extends Resource {
 })
 export class BookingClientComponent implements OnInit, OnDestroy {
   private readonly bookingService = inject(BookingService);
-  private readonly socketService  = inject(SocketService);
-  private readonly authService    = inject(AuthService);
-  private readonly http           = inject(HttpClient);
+  private readonly socketService = inject(SocketService);
+  private readonly authService = inject(AuthService);
+  private readonly http = inject(HttpClient);
 
-  myBookings         = signal<Booking[]>([]);
-  resources          = signal<Resource[]>([]);
-  allTodayBookings   = signal<Record<string, DayBooking[]>>({});
-  isLoading          = signal(true);
+  myBookings = signal<Booking[]>([]);
+  resources = signal<Resource[]>([]);
+  allTodayBookings = signal<Record<string, DayBooking[]>>({});
+  isLoading = signal(true);
   isLoadingResources = signal(true);
-  isSubmitting       = signal(false);
-  bookingError       = signal<string | null>(null);
-  recentlyUpdated    = signal<Set<string>>(new Set());
-  showModal          = signal(false);
-  selectedResource   = signal<Resource | null>(null);
-  toasts             = signal<{ id: number; message: string; type: string; leaving: boolean }[]>([]);
-  wsConnected        = signal(false);
-  toastCounter       = 0;
+  isSubmitting = signal(false);
+  bookingError = signal<string | null>(null);
+  recentlyUpdated = signal<Set<string>>(new Set());
+  showModal = signal(false);
+  selectedResource = signal<Resource | null>(null);
+  toasts = signal<{ id: number; message: string; type: string; leaving: boolean }[]>([]);
+  wsConnected = signal(false);
+  toastCounter = 0;
 
   newBooking: CreateBookingDto = {
     resourceId: '', resourceName: '', startTime: '', endTime: '', notes: ''
   };
 
-  estimatedAmount   = signal(0);
+  estimatedAmount = signal(0);
   estimatedDuration = signal(0);
 
   currentUser = computed(() => this.authService.currentUser());
@@ -1602,7 +1627,7 @@ export class BookingClientComponent implements OnInit, OnDestroy {
         });
         this.allTodayBookings.update(map => ({ ...map, [resourceId]: todayB }));
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
@@ -1634,7 +1659,7 @@ export class BookingClientComponent implements OnInit, OnDestroy {
     const res = this.selectedResource();
     if (!startTime || !endTime || !res) return;
     const start = new Date(startTime);
-    const end   = new Date(endTime);
+    const end = new Date(endTime);
     if (end <= start) return;
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
     this.estimatedDuration.set(Math.round(hours * 10) / 10);
@@ -1648,7 +1673,7 @@ export class BookingClientComponent implements OnInit, OnDestroy {
     const payload: CreateBookingDto = {
       ...this.newBooking,
       startTime: new Date(this.newBooking.startTime).toISOString(),
-      endTime:   new Date(this.newBooking.endTime).toISOString(),
+      endTime: new Date(this.newBooking.endTime).toISOString(),
     };
 
     this.bookingService.createBooking(payload).subscribe({
@@ -1684,7 +1709,7 @@ export class BookingClientComponent implements OnInit, OnDestroy {
     return Array.from({ length: 12 }, (_, i) => {
       const hour = 8 + i;
       const from = new Date(); from.setHours(hour, 0, 0, 0);
-      const to   = new Date(); to.setHours(hour + 1, 0, 0, 0);
+      const to = new Date(); to.setHours(hour + 1, 0, 0, 0);
       const overlaps = bookings.filter(b =>
         new Date(b.startTime) < to && new Date(b.endTime) > from
       );
