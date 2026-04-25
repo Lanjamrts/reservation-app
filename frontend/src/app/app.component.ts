@@ -1,5 +1,6 @@
 
-import { Component } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { ThemeService } from './services/theme.service';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { NavbarComponent } from './components/navbar/navbar.component';
@@ -40,6 +41,11 @@ import { NavbarComponent } from './components/navbar/navbar.component';
     }
   `]
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   title = 'reserva-frontend';
+  private themeService = inject(ThemeService);
+
+  ngOnInit() {
+    this.themeService.initTheme();
+  }
 }
