@@ -51,7 +51,7 @@ export class ResourceController {
   @UseGuards(JwtAuthGuard)
   async findAll(@Query('status') status?: string) {
     const filter = status ? { status } : {};
-    return this.resourceModel.find(filter).sort({ createdAt: -1 }).exec();
+    return this.resourceModel.find(filter).sort({ createdAt: -1 }).lean().exec();
   }
 
   @Get('available')
@@ -60,6 +60,7 @@ export class ResourceController {
     return this.resourceModel
       .find({ available: true, status: ResourceStatus.AVAILABLE })
       .sort({ createdAt: -1 })
+      .lean()
       .exec();
   }
 
@@ -67,19 +68,25 @@ export class ResourceController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async getStats() {
-    const all = await this.resourceModel.find().exec();
+    const [total, available, reserved, maintenance] = await Promise.all([
+      this.resourceModel.countDocuments().exec(),
+      this.resourceModel.countDocuments({ status: ResourceStatus.AVAILABLE }).exec(),
+      this.resourceModel.countDocuments({ status: ResourceStatus.RESERVED }).exec(),
+      this.resourceModel.countDocuments({ status: ResourceStatus.MAINTENANCE }).exec(),
+    ]);
+
     return {
-      total: all.length,
-      available: all.filter(r => r.status === ResourceStatus.AVAILABLE).length,
-      reserved: all.filter(r => r.status === ResourceStatus.RESERVED).length,
-      maintenance: all.filter(r => r.status === ResourceStatus.MAINTENANCE).length,
+      total,
+      available,
+      reserved,
+      maintenance,
     };
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('id') id: string) {
-    return this.resourceModel.findById(id).exec();
+    return this.resourceModel.findById(id).lean().exec();
   }
 
   @Post()

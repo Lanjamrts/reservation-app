@@ -10,6 +10,10 @@ export class CreateBookingDto {
   @IsString()
   userName?: string;
 
+  @IsOptional()
+  @IsString()
+  userEmail?: string;
+
   @IsString()
   @IsNotEmpty()
   resourceId: string;

@@ -35,7 +35,7 @@ export class BookingService {
       resourceId,
       status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] },
       $or: [{ startTime: { $lt: end }, endTime: { $gt: start } }],
-    });
+    }).lean().exec();
 
     if (conflict) {
       throw new ConflictException(`Cette salle est déjà réservée pour ce créneau.`);
@@ -88,18 +88,19 @@ export class BookingService {
     return saved;
   }
 
-  async findAll(): Promise<BookingDocument[]> {
-    return this.bookingModel.find().sort({ startTime: 1 }).exec();
+  async findAll(): Promise<Booking[]> {
+    return this.bookingModel.find().sort({ startTime: 1 }).lean().exec();
   }
 
-  async findByUser(userId: string): Promise<BookingDocument[]> {
-    return this.bookingModel.find({ userId }).sort({ startTime: 1 }).exec();
+  async findByUser(userId: string): Promise<Booking[]> {
+    return this.bookingModel.find({ userId }).sort({ startTime: 1 }).lean().exec();
   }
 
-  async findByResource(resourceId: string): Promise<BookingDocument[]> {
+  async findByResource(resourceId: string): Promise<Booking[]> {
     return this.bookingModel
       .find({ resourceId, status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] } })
       .sort({ startTime: 1 })
+      .lean()
       .exec();
   }
 
@@ -132,6 +133,27 @@ export class BookingService {
         if (status === BookingStatus.CONFIRMED) notifType = 'booking_confirmed';
         else if (status === BookingStatus.CANCELLED) notifType = 'booking_cancelled';
         else if (status === BookingStatus.PENDING) notifType = 'booking_reminder';
+
+        // Générer le PDF pour les confirmations
+        let attachment: Buffer | undefined;
+        if (status === BookingStatus.CONFIRMED) {
+          try {
+            attachment = await this.notificationService.generateBookingPdf({
+              to: userEmail,
+              userName: updated.userName,
+              resourceName: updated.resourceName,
+              startTime: updated.startTime,
+              endTime: updated.endTime,
+              invoiceNumber: updated.invoiceNumber,
+              amount: updated.paymentAmount,
+              type: notifType,
+            });
+          } catch (error) {
+            // Log l'erreur mais continue l'envoi de l'email sans PDF
+            console.error('Erreur génération PDF:', error);
+          }
+        }
+
         this.notificationService.sendNotification({
           to: userEmail,
           userName: updated.userName,
@@ -141,7 +163,7 @@ export class BookingService {
           invoiceNumber: updated.invoiceNumber,
           amount: updated.paymentAmount,
           type: notifType,
-        }).catch(() => {});
+        }, attachment).catch(() => {});
       }
     }
 
@@ -192,20 +214,28 @@ export class BookingService {
   }
 
   async getStats() {
-    const all = await this.bookingModel.find().exec();
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-    const confirmed = all.filter(b => b.status === BookingStatus.CONFIRMED);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const [total, pending, confirmed, cancelled, todayBookings] = await Promise.all([
+      this.bookingModel.countDocuments().exec(),
+      this.bookingModel.countDocuments({ status: BookingStatus.PENDING }).exec(),
+      this.bookingModel.countDocuments({ status: BookingStatus.CONFIRMED }).exec(),
+      this.bookingModel.countDocuments({ status: BookingStatus.CANCELLED }).exec(),
+      this.bookingModel.countDocuments({
+        startTime: { $gte: today, $lt: tomorrow },
+      }).exec(),
+    ]);
 
     return {
-      total: all.length,
-      pending: all.filter(b => b.status === BookingStatus.PENDING).length,
-      confirmed: confirmed.length,
-      cancelled: all.filter(b => b.status === BookingStatus.CANCELLED).length,
-      occupancyRate: all.length > 0 ? Math.round((confirmed.length / all.length) * 100) : 0,
-      todayBookings: all.filter(b =>
-        new Date(b.startTime) >= today && new Date(b.startTime) < tomorrow
-      ).length,
+      total,
+      pending,
+      confirmed,
+      cancelled,
+      occupancyRate: total > 0 ? Math.round((confirmed / total) * 100) : 0,
+      todayBookings,
     };
   }
 
@@ -219,7 +249,7 @@ export class BookingService {
       status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] },
       startTime: { $gte: dayStart },
       endTime: { $lte: dayEnd },
-    }).exec();
+    }, { startTime: 1, endTime: 1, _id: 0 }).lean().exec();
 
     const slots: { start: string; end: string; available: boolean }[] = [];
     const slotStart = new Date(dayStart);

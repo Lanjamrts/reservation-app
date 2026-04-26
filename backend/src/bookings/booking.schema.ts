@@ -29,6 +29,9 @@ export class Booking {
   userName: string;
 
   @Prop({ required: true })
+  userEmail: string;
+
+  @Prop({ required: true })
   resourceId: string;
 
   @Prop({ required: true })
@@ -75,6 +78,7 @@ export const BookingSchema = SchemaFactory.createForClass(Booking);
 
 // Index to prevent double bookings on the same resource/time
 BookingSchema.index({ resourceId: 1, startTime: 1, endTime: 1 });
+BookingSchema.index({ userId: 1, status: 1, startTime: 1 });
 
 // Middleware for optimistic locking check
 BookingSchema.pre('findOneAndUpdate', function () {

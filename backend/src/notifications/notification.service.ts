@@ -45,18 +45,28 @@ export class NotificationService {
     }
   }
 
-  async sendNotification(payload: NotificationPayload): Promise<void> {
+  async sendNotification(payload: NotificationPayload, attachment?: Buffer): Promise<void> {
     const subject = this.getSubject(payload.type);
     const html = this.buildEmailHtml(payload);
 
+    const mailOptions: any = {
+      from: `"Reserva App" <${this.configService.get('SMTP_USER')}>`,
+      to: payload.to,
+      subject,
+      html,
+    };
+
+    if (attachment && payload.type === 'booking_confirmed') {
+      mailOptions.attachments = [{
+        filename: `facture-${payload.invoiceNumber}.pdf`,
+        content: attachment,
+        contentType: 'application/pdf',
+      }];
+    }
+
     if (this.transporter) {
       try {
-        await this.transporter.sendMail({
-          from: `"Reserva App" <${this.configService.get('SMTP_USER')}>`,
-          to: payload.to,
-          subject,
-          html,
-        });
+        await this.transporter.sendMail(mailOptions);
         this.logger.log(`Email sent to ${payload.to} [${payload.type}]`);
       } catch (err) {
         this.logger.error(`Email send failed: ${err.message}`);
@@ -65,6 +75,87 @@ export class NotificationService {
       // Log notification for dev mode
       this.logger.log(`[DEV] Notification: ${payload.type} → ${payload.to}`);
       this.logger.log(`Subject: ${subject}`);
+    }
+  }
+
+  async generateBookingPdf(payload: NotificationPayload): Promise<Buffer> {
+    try {
+      const jsPDF = await import('jspdf');
+      const doc = new jsPDF.default();
+
+      // Configuration du document
+      doc.setFont('helvetica');
+
+      // En-tête
+      doc.setFontSize(20);
+      doc.setTextColor(99, 102, 241); // Bleu indigo
+      doc.text('RESERVA', 105, 20, { align: 'center' });
+
+      doc.setFontSize(12);
+      doc.setTextColor(148, 163, 184); // Gris
+      doc.text('Gestion de salles professionnelle', 105, 30, { align: 'center' });
+
+      // Titre de la facture
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59); // Noir
+      doc.text('FACTURE DE RÉSERVATION', 105, 50, { align: 'center' });
+
+      // Numéro de facture
+      if (payload.invoiceNumber) {
+        doc.setFontSize(12);
+        doc.setTextColor(99, 102, 241);
+        doc.text(`N° ${payload.invoiceNumber}`, 105, 65, { align: 'center' });
+      }
+
+      // Informations client
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Client:', 20, 85);
+      doc.setFontSize(11);
+      doc.setTextColor(71, 85, 105);
+      doc.text(payload.userName, 20, 95);
+
+      // Détails de la réservation
+      doc.setFontSize(12);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Détails de la réservation:', 20, 115);
+
+      const formatDate = (d: Date) =>
+        new Date(d).toLocaleString('fr-FR', {
+          dateStyle: 'short',
+          timeStyle: 'short'
+        });
+
+      doc.setFontSize(11);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`Salle: ${payload.resourceName}`, 20, 130);
+      doc.text(`Début: ${formatDate(payload.startTime)}`, 20, 140);
+      doc.text(`Fin: ${formatDate(payload.endTime)}`, 20, 150);
+
+      // Montant
+      if (payload.amount) {
+        doc.setFontSize(12);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Montant total:', 20, 170);
+        doc.setFontSize(14);
+        doc.setTextColor(16, 185, 129); // Vert
+        doc.text(`${payload.amount.toLocaleString('fr-FR')} Ar`, 20, 180);
+      }
+
+      // Pied de page
+      doc.setFontSize(10);
+      doc.setTextColor(148, 163, 184);
+      doc.text('Merci pour votre confiance!', 105, 250, { align: 'center' });
+      doc.text('Cet document a été généré automatiquement par Reserva.', 105, 260, { align: 'center' });
+
+      // Date de génération
+      const today = new Date().toLocaleDateString('fr-FR');
+      doc.text(`Généré le ${today}`, 105, 270, { align: 'center' });
+
+      return Buffer.from(doc.output('arraybuffer'));
+    } catch (error) {
+      this.logger.error(`PDF generation failed: ${error.message}`);
+      throw error;
     }
   }
 

@@ -17,6 +17,7 @@ import { ProfileService, UserProfile } from '../../services/profile.service';
             [src]="previewImage || profileData?.profileImage"
             alt="Photo de profil"
             class="profile-image"
+            loading="lazy"
           />
           <div 
             *ngIf="!previewImage && !profileData?.profileImage"

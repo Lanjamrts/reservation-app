@@ -15,7 +15,6 @@ interface Resource {
   description: string;
   capacity: number;
   available: boolean;
-  photos: string[];
   amenities: string[];
   rules: string;
   location: string;
@@ -182,15 +181,8 @@ interface Toast {
 
             <div class="form-group">
               <label>Image de la salle</label>
-              <div class="image-select-grid">
-                @for (img of availableImages; track img) {
-                  <img [src]="img" alt="image salle" class="selectable-img"
-                    [class.selected-img]="resForm.photos[0] === img"
-                    (click)="selectImage(img)" />
-                }
-              </div>
-              <div *ngIf="resForm.photos.length" class="photo-preview mt-2">
-                <img [src]="resForm.photos[0]" alt="preview" style="max-width:120px; border-radius:8px; border:2px solid #4f46e5;" />
+              <div class="image-note">
+                La sélection d’images a été désactivée pour améliorer les performances côté utilisateur.
               </div>
             </div>
 
@@ -273,8 +265,7 @@ interface Toast {
 
            <div class="booking-grid">
              @for (booking of filteredBookings(); track booking._id) {
-               <div class="booking-card animate-in" [class.new-update]="recentUpdates().has(booking._id)"
-                 [style.background-image]="'url(' + getResourcePhoto(booking.resourceId) + ')'">
+               <div class="booking-card animate-in" [class.new-update]="recentUpdates().has(booking._id)">
                  <div class="booking-card-overlay">
                    <div class="bc-header">
                      <span class="invoice-num">{{ booking.invoiceNumber || 'N/A' }}</span>
@@ -369,8 +360,7 @@ interface Toast {
     @media(max-width: 1100px) { .resources-layout { grid-template-columns: 1fr; } }
     .resource-form-section { padding: 32px; background: var(--gradient-card); }
     .amenities-selector { display: flex; flex-wrap: wrap; gap: 10px; }
-    .photo-preview { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
-    .photo-preview img { width: 80px; height: 60px; object-fit: cover; border-radius: 10px; border: 2px solid var(--border-subtle); }
+    .image-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--border-default); border-radius: 16px; }
 
     .admin-room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
     .admin-room-card { padding: 24px; background: var(--bg-surface); border: 1px solid var(--border-subtle); transition: all 0.3s; }
@@ -386,10 +376,6 @@ interface Toast {
     .border-t { border-top: 1px solid var(--border-subtle); }
     .pt-3 { padding-top: 16px; }
     .mr-1 { margin-right: 6px; }
-    .image-select-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
-    .selectable-img { width: 80px; height: 60px; object-fit: cover; border-radius: 10px; border: 2px solid var(--border-default); cursor: pointer; transition: all 0.2s; }
-    .selectable-img:hover { transform: scale(1.05); border-color: var(--border-medium); }
-    .selectable-img.selected-img { border: 2px solid var(--brand); box-shadow: 0 0 15px var(--brand-glow); transform: scale(1.1); }
 
     /* BOOKING CARDS */
     .booking-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 32px; }
@@ -477,28 +463,7 @@ export class DashboardAdminComponent implements OnInit {
   wsConnected = signal(false);
 
   availableAmenities = ['WiFi', 'Projecteur', 'Tableau blanc', 'Climatisation', 'Visioconférence', 'Imprimante', 'Cuisine', 'Parking'];
-  // Liste des images disponibles dans le dossier images
-  availableImages = [
-    'assets/images/image1.jpg',
-    'assets/images/image2.jpg',
-    'assets/images/image3.jpg',
-    'assets/images/image4.jpg',
-    'assets/images/image5.jpg',
-    'assets/images/image6.jpg',
-    'assets/images/image7.jpg',
-    'assets/images/image8.jpg',
-    'assets/images/image9.jpg',
-    'assets/images/image10.jpg',
-  ];
-    selectImage(img: string) {
-      this.resForm.photos = [img];
-    }
-
-  getResourcePhoto(resourceId: string): string {
-    const res = this.resources().find(r => r._id === resourceId);
-    return res?.photos?.[0] || 'assets/images/image1.jpg';
-  }
-  resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', photos: [] as string[], amenities: [] as string[] };
+  resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', amenities: [] as string[] };
 
   filteredBookings = computed(() => {
     const s = this.filterStatus();
@@ -566,10 +531,6 @@ export class DashboardAdminComponent implements OnInit {
     else this.resForm.amenities.push(a);
   }
 
-  updatePhotos(val: string) {
-    this.resForm.photos = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
-  }
-
   saveResource() {
     this.isSaving.set(true);
     const ed = this.editingResource();
@@ -593,13 +554,13 @@ export class DashboardAdminComponent implements OnInit {
     this.resForm = {
       name: r.name, description: r.description, capacity: r.capacity, available: r.available,
       status: r.status || 'available', pricePerHour: r.pricePerHour || 0,
-      location: r.location || '', photos: [...(r.photos || [])], amenities: [...(r.amenities || [])]
+      location: r.location || '', amenities: [...(r.amenities || [])]
     };
   }
 
   cancelEdit() {
     this.editingResource.set(null);
-    this.resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', photos: [], amenities: [] };
+    this.resForm = { name: '', description: '', capacity: 10, available: true, status: 'available', pricePerHour: 0, location: '', amenities: [] };
   }
 
   deleteResource(id: string) {
@@ -618,7 +579,12 @@ export class DashboardAdminComponent implements OnInit {
       return;
     }
     this.bookingService.updateStatus(id, { status: st as BookingStatus, version: booking.version }).subscribe({
-      next: () => this.showToast('Statut mis à jour', 'success'),
+      next: (updatedBooking) => {
+        // Mise à jour optimiste immédiate
+        this.allBookings.update(l => l.map(b => b._id === id ? updatedBooking : b));
+        this.showToast('Statut mis à jour', 'success');
+        // Le WebSocket confirmera la mise à jour
+      },
       error: (err) => {
         if (err?.error?.message?.includes('modifiée par une autre requête') || err?.status === 409) {
           this.showToast('Conflit de version, rechargez la page', 'error');

@@ -151,6 +151,12 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  transition: background 0.35s var(--ease-smooth),
+              color 0.35s var(--ease-smooth),
+              border-color 0.35s var(--ease-smooth),
+              box-shadow 0.35s var(--ease-smooth),
+              fill 0.35s var(--ease-smooth),
+              stroke 0.35s var(--ease-smooth);
 }
 
 html {
@@ -166,6 +172,8 @@ body {
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   overflow-x: hidden;
+  transition: background 0.45s var(--ease-smooth),
+              color 0.45s var(--ease-smooth);
   /* Ambient glow — Midnight Aurora theme */
   background-image:
     linear-gradient(160deg, #050508 0%, #0a0910 50%, #13121d 100%),

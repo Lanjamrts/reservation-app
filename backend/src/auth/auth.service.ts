@@ -13,6 +13,7 @@ import { User, UserDocument } from './user.schema';
 export interface JwtPayload {
   sub: string;
   username: string;
+  email: string;
   role: 'admin' | 'user';
 }
 
@@ -40,6 +41,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user._id.toString(),
       username: user.username,
+      email: user.email,
       role: user.role,
     };
 
@@ -48,13 +50,14 @@ export class AuthService {
       user: {
         userId: user._id.toString(),
         username: user.username,
+        email: user.email,
         role: user.role,
       },
     };
   }
 
   async findById(userId: string): Promise<object | null> {
-    const user = await this.userModel.findById(userId).select('-password').exec();
+    const user = await this.userModel.findById(userId).select('-password').lean().exec();
     if (!user) return null;
     return {
       userId: user._id.toString(),
@@ -82,8 +85,8 @@ export class AuthService {
   }
 
   async findAll(): Promise<object[]> {
-    const users = await this.userModel.find().select('-password').exec();
-    return users.map((u) => ({
+    const users = await this.userModel.find().select('-password').lean().exec();
+    return users.map((u: any) => ({
       userId: u._id.toString(),
       username: u.username,
       role: u.role,
@@ -91,7 +94,7 @@ export class AuthService {
   }
 
   async getProfile(userId: string): Promise<object> {
-    const user = await this.userModel.findById(userId).select('-password').exec();
+    const user = await this.userModel.findById(userId).select('-password').lean().exec();
     if (!user) throw new NotFoundException('Utilisateur non trouvé');
 
     return {

@@ -17,7 +17,6 @@ interface Resource {
   description: string;
   capacity: number;
   available: boolean;
-  photos: string[];
   amenities: string[];
   rules: string;
   location: string;
@@ -90,15 +89,11 @@ interface ResourceWithBookings extends Resource {
 
             <!-- Resource preview card -->
             <div class="modal-resource-card">
-              <div class="modal-resource-thumb">
-                @if (res.photos.length) {
-                  <img [src]="res.photos[0]" [alt]="res.name" (error)="onImgError($event)" />
-                } @else {
-                  <div class="modal-thumb-placeholder">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
-                  </div>
-                }
+              <div class="modal-resource-thumb modal-resource-thumb-placeholder">
+              <div class="modal-thumb-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
               </div>
+            </div>
               <div class="modal-resource-meta">
                 <div class="modal-resource-name">{{ res.name }}</div>
                 @if (res.location) {
@@ -309,15 +304,10 @@ interface ResourceWithBookings extends Resource {
               <article class="room-card animate-in" [style.animation-delay]="(i * 0.08) + 's'">
 
                 <!-- Photo -->
-                <div class="room-photo-wrap">
-                  @if (res.photos.length) {
-                    <img [src]="res.photos[0]" [alt]="res.name" class="room-photo"
-                      (error)="onImgError($event)" loading="lazy" />
-                  } @else {
-                    <div class="room-photo-fallback">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
-                    </div>
-                  }
+                <div class="room-photo-wrap room-photo-wrap-placeholder">
+                  <div class="room-photo-fallback room-photo-fallback-big">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.35"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+                  </div>
                   <div class="room-photo-gradient"></div>
 
                   <!-- Badges on photo -->
@@ -791,7 +781,10 @@ interface ResourceWithBookings extends Resource {
       position: relative;
       height: 200px;
       overflow: hidden;
-      background: var(--bg-elevated);
+      background: linear-gradient(180deg, rgba(15,14,24,0.95) 0%, rgba(15,14,24,0.85) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: grid;
+      place-items: center;
     }
 
     .room-photo {
@@ -808,6 +801,16 @@ interface ResourceWithBookings extends Resource {
       align-items: center;
       justify-content: center;
       background: var(--bg-elevated);
+    }
+
+    .room-photo-fallback-big {
+      width: 120px;
+      height: 120px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.04);
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 24px;
     }
 
     .room-photo-gradient {
@@ -1762,11 +1765,6 @@ export class BookingClientComponent implements OnInit, OnDestroy {
       'Imprimante': '🖨️', 'Cuisine': '🍽️', 'Parking': '🅿️',
     };
     return icons[a] ?? '✓';
-  }
-
-  onImgError(event: Event) {
-    const img = event.target as HTMLImageElement;
-    img.style.display = 'none';
   }
 
   private showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {

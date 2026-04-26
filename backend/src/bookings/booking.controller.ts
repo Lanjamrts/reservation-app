@@ -31,6 +31,7 @@ export class BookingController {
     // Override userId with authenticated user's id to prevent spoofing
     createBookingDto.userId = req.user.userId;
     createBookingDto.userName = req.user.username;
+    createBookingDto.userEmail = req.user.email;
     return this.bookingService.create(createBookingDto);
   }
 

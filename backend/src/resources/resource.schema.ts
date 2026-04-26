@@ -47,3 +47,7 @@ export class Resource {
 }
 
 export const ResourceSchema = SchemaFactory.createForClass(Resource);
+
+ResourceSchema.index({ status: 1 });
+ResourceSchema.index({ available: 1 });
+ResourceSchema.index({ createdAt: -1 });

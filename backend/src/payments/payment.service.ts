@@ -37,16 +37,16 @@ export class PaymentService {
     return payment.save();
   }
 
-  async findAll(): Promise<PaymentDocument[]> {
-    return this.paymentModel.find().sort({ createdAt: -1 }).exec();
+  async findAll(): Promise<Payment[]> {
+    return this.paymentModel.find().sort({ createdAt: -1 }).lean().exec();
   }
 
-  async findByBooking(bookingId: string): Promise<PaymentDocument | null> {
-    return this.paymentModel.findOne({ bookingId }).exec();
+  async findByBooking(bookingId: string): Promise<Payment | null> {
+    return this.paymentModel.findOne({ bookingId }).lean().exec();
   }
 
-  async findByUser(userId: string): Promise<PaymentDocument[]> {
-    return this.paymentModel.find({ userId }).sort({ createdAt: -1 }).exec();
+  async findByUser(userId: string): Promise<Payment[]> {
+    return this.paymentModel.find({ userId }).sort({ createdAt: -1 }).lean().exec();
   }
 
   async updateStatus(
@@ -74,41 +74,62 @@ export class PaymentService {
     pendingCount: number;
     monthlyRevenue: { month: string; amount: number }[];
   }> {
-    const payments = await this.paymentModel.find().exec();
-    const paid = payments.filter(p => p.status === PaymentStatus.PAID);
-    const pending = payments.filter(p => p.status === PaymentStatus.PENDING);
-
-    const totalRevenue = paid.reduce((sum, p) => sum + p.amount, 0);
-    const pendingRevenue = pending.reduce((sum, p) => sum + p.amount, 0);
-
-    // Monthly revenue for the last 6 months
-    const monthlyMap = new Map<string, number>();
     const now = new Date();
+    const monthlyKeys = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthlyMap.set(key, 0);
+      monthlyKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
-    paid.forEach(p => {
-      if (p.paidAt) {
-        const key = `${p.paidAt.getFullYear()}-${String(p.paidAt.getMonth() + 1).padStart(2, '0')}`;
-        if (monthlyMap.has(key)) {
-          monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + p.amount);
-        }
-      }
-    });
 
-    const monthlyRevenue = Array.from(monthlyMap.entries()).map(([month, amount]) => ({
+    const [totalPayments, paidCount, pendingCount, revenueResults] = await Promise.all([
+      this.paymentModel.countDocuments().exec(),
+      this.paymentModel.countDocuments({ status: PaymentStatus.PAID }).exec(),
+      this.paymentModel.countDocuments({ status: PaymentStatus.PENDING }).exec(),
+      this.paymentModel.aggregate([
+        {
+          $match: {
+            status: PaymentStatus.PAID,
+            paidAt: { $exists: true, $ne: null },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$paidAt' },
+              month: { $month: '$paidAt' },
+            },
+            amount: { $sum: '$amount' },
+          },
+        },
+      ]).exec(),
+    ]);
+
+    const monthlyRevenueMap = new Map<string, number>();
+    for (const row of revenueResults as Array<{ _id: { year: number; month: number }; amount: number }>) {
+      const monthKey = `${row._id.year}-${String(row._id.month).padStart(2, '0')}`;
+      monthlyRevenueMap.set(monthKey, row.amount);
+    }
+
+    const monthlyRevenue = monthlyKeys.map((month) => ({
       month,
-      amount,
+      amount: monthlyRevenueMap.get(month) ?? 0,
     }));
+
+    const totalRevenue = Array.from(monthlyRevenueMap.values()).reduce((sum, amount) => sum + amount, 0);
+    const pendingRevenue = await this.paymentModel
+      .aggregate([
+        { $match: { status: PaymentStatus.PENDING } },
+        { $group: { _id: null, amount: { $sum: '$amount' } } },
+      ])
+      .exec()
+      .then((result) => (result[0]?.amount ?? 0));
 
     return {
       totalRevenue,
       pendingRevenue,
-      totalPayments: payments.length,
-      paidCount: paid.length,
-      pendingCount: pending.length,
+      totalPayments,
+      paidCount,
+      pendingCount,
       monthlyRevenue,
     };
   }
